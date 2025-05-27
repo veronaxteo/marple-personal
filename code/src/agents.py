@@ -65,6 +65,7 @@ class Suspect(Agent):
                 call_args['naive_A_crumb_likelihoods_map'] = params.naive_A_crumb_likelihoods_map
                 call_args['naive_B_crumb_likelihoods_map'] = params.naive_B_crumb_likelihoods_map
                 call_args['noisy_planting_sigma'] = params.noisy_planting_sigma if params.noisy_planting_sigma is not None else 0.0
+
             elif agent_type == 'naive':
                 call_args['w'] = params.w if params.w is not None else 0.0
                 call_args['temp'] = params.n_temp if params.n_temp is not None else 0.0
@@ -121,11 +122,11 @@ class Detective(Agent):
 
     def smooth_likelihoods(self, raw_likelihoods_A: dict, raw_likelihoods_B: dict, agent_type: str, w_t0: World, params: SimulationParams) -> tuple[dict, dict]:
         if agent_type == 'sophisticated':
-            sigma = params.soph_detective_sigma
-            if sigma > 0:
+            detective_sigma = params.soph_detective_sigma
+            if detective_sigma > 0:
                 if raw_likelihoods_A and raw_likelihoods_B:
-                    final_A = smooth_likelihood_grid(raw_likelihoods_A, w_t0, sigma)
-                    final_B = smooth_likelihood_grid(raw_likelihoods_B, w_t0, sigma)
+                    final_A = smooth_likelihood_grid(raw_likelihoods_A, w_t0, detective_sigma)
+                    final_B = smooth_likelihood_grid(raw_likelihoods_B, w_t0, detective_sigma)
                     return final_A, final_B
         return raw_likelihoods_A, raw_likelihoods_B
 

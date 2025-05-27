@@ -14,8 +14,8 @@ class SimulationParams:
     mismatched: Optional[bool] = False 
 
     door_close_prob: float = 0.0
+    soph_suspect_sigma: float = 1.0
     soph_detective_sigma: float = 1.0
-    soph_suspect_sigma: float = 1.0   
     noisy_planting_sigma: float = 0.5
     
     naive_A_crumb_likelihoods_map: Optional[Dict[Any, Any]] = field(default_factory=dict)

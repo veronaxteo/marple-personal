@@ -5,7 +5,7 @@ import seaborn as sns
 import numpy as np
 from collections import Counter
 import logging
-from world_old import initialize_world_start
+from world import World
 import ast
 import argparse
 import sys
@@ -20,7 +20,7 @@ def plot_suspect_paths_heatmap(trial_name, param_log_dir, agent_type_to_plot):
     logger = logging.getLogger(__name__)
 
     trial_file_name = f"{trial_name}_A1.json"
-    world = initialize_world_start(trial_file_name)
+    world = World.initialize_world_start(trial_file_name)
     kitchen_width = world.kitchen_width
     kitchen_height = world.kitchen_height
 
@@ -102,7 +102,7 @@ def plot_suspect_crumb_planting_heatmap(trial_name, param_log_dir):
 
     # Load world object to get kitchen dimensions
     trial_file_name = f"{trial_name}_A1.json" 
-    world = initialize_world_start(trial_file_name)
+    world = World.initialize_world_start(trial_file_name)
     logger.info(f"Successfully loaded world for trial: {trial_name}")
 
     kitchen_width = world.kitchen_width
@@ -168,7 +168,7 @@ def plot_detective_predictions_heatmap(trial_name, param_log_dir, detective_agen
 
     trial_file_name = f"{trial_name}_A1.json" 
     try:
-        world = initialize_world_start(trial_file_name)
+        world = World.initialize_world_start(trial_file_name)
         logger.info(f"Successfully loaded world for trial: {trial_name} to plot detective predictions.")
     except Exception as e:
         logger.error(f"Failed to load world for trial {trial_name} using {trial_file_name}: {e}. Cannot generate detective prediction heatmap.")

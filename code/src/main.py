@@ -121,9 +121,6 @@ if __name__ == '__main__':
     with open(metadata_filepath, 'w') as f_meta:
         json.dump(params_dict_for_metadata, f_meta, indent=4)
 
-    np.random.seed(params.seed)
-    random.seed(params.seed)
-
     if args.command == 'rsm':
         simulator = RSMSimulator(args, log_dir_base, param_log_dir, params, trials_to_run)
     elif args.command == 'empirical':
@@ -134,6 +131,8 @@ if __name__ == '__main__':
         main_logger.error(f"Unknown command: {args.command}. Exiting.")
         exit(1)
     
-    # simulator.run(params)
+    np.random.seed(params.seed)
+    random.seed(params.seed)
+    
     simulator.run()
     main_logger.info(f"Simulation completed for {args.command} model.")

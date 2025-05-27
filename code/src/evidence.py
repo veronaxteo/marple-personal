@@ -3,7 +3,7 @@ import numpy as np
 from scipy.stats import norm
 
 
-class Evidence():
+class Evidence:
     """
     Base evidence class.
 
@@ -26,15 +26,14 @@ class VisualEvidence(Evidence):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    # TODO: clean params and init
+
     def get_visual_evidence_likelihood(
         crumb_coord_tuple, 
         agent_full_sequences, 
         agent_middle_sequences, 
         world_state, 
-        door_close_prob=0,
         agent_type_being_simulated='naive',  
-        chosen_plant_spots_for_sequences=None # List of (x,y) tuples or None, parallel to sequences
+        chosen_plant_spots_for_sequences=None
     ):
         """
         Calculates the likelihood of observing a crumb at crumb_coord_tuple, given the agent's sampled full path sequences (world coords).

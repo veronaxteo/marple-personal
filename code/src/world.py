@@ -216,7 +216,6 @@ class World():
         and returns a list of these spots.
         If noisy_planting_sigma is greater than 0 for sophisticated agents, the final chosen spot might be a Gaussian-weighted neighbor of the optimal.
         """
-        start_time = time.time()
         logger = logging.getLogger(__name__)
 
         sequences_p1, sequences_p2, sequences_p3 = simple_path_sequences

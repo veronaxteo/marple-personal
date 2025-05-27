@@ -5,6 +5,8 @@ import logging
 import pickle
 import random
 import networkx as nx
+import datetime
+
 from scipy.ndimage import gaussian_filter
 from numpy.random import rand
 
@@ -20,8 +22,9 @@ def softmax_list_vals(vals, temp):
 
 def create_param_dir(log_dir, trial_name, w=0, naive_temp=0, soph_temp=0, max_steps=25, model_type="rsm"):
     """Creates parameter-specific log directory."""
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     if model_type == "rsm":
-        param_subdir = f'w{w}_ntemp{naive_temp}_stemp{soph_temp}_steps{max_steps}'
+        param_subdir = f'w{w}_ntemp{naive_temp}_stemp{soph_temp}_steps{max_steps}_{timestamp}'
     elif model_type == "uniform":
         param_subdir = f'uniform_steps{max_steps}'
     elif model_type == "empirical":

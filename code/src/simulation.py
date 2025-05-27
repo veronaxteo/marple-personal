@@ -68,6 +68,7 @@ class RSMSimulator(BaseSimulator):
 
         ## Naive
         self.logger.info("--- Simulating Level 1 (Naive Agent) ---")
+        # Suspect
         self.logger.info(f"Simulating {num_sample_paths_suspect} paths for suspect (naive)...")
         sampled_data_naive = current_suspect_agent.simulate_suspect(
             w_t0, simple_paths_A_seqs, simple_paths_B_seqs, 'naive',
@@ -75,6 +76,7 @@ class RSMSimulator(BaseSimulator):
         )
         save_sampled_paths_to_csv(sampled_data_naive, trial_name, self.param_log_dir, 'naive')
 
+        # Detective
         self.logger.info(f"Simulating {num_sample_paths_for_detective} paths for detective (modeling suspect as naive)...")
         sampled_data_for_naive_detective_calc = current_suspect_agent.simulate_suspect(
             w_t0, simple_paths_A_seqs, simple_paths_B_seqs, 'naive',
@@ -94,15 +96,13 @@ class RSMSimulator(BaseSimulator):
         naive_B_map_for_suspect = naive_B_crumb_likelihoods_map_raw
 
         if suspect_sigma > 0:
-            if naive_A_crumb_likelihoods_map_raw and naive_B_crumb_likelihoods_map_raw:
-                self.logger.info(f"Smoothing naive likelihood maps for sophisticated suspect with sigma: {suspect_sigma}")
-                naive_A_map_for_suspect = smooth_likelihood_grid(naive_A_crumb_likelihoods_map_raw, w_t0, suspect_sigma)
-                naive_B_map_for_suspect = smooth_likelihood_grid(naive_B_crumb_likelihoods_map_raw, w_t0, suspect_sigma)
-            else:
-                self.logger.warning("Sophisticated suspect smoothing sigma > 0 but raw naive maps are empty. No smoothing applied.")
-        
+            self.logger.info(f"Smoothing naive likelihood maps for sophisticated suspect with sigma: {suspect_sigma}")
+            naive_A_map_for_suspect = smooth_likelihood_grid(naive_A_crumb_likelihoods_map_raw, w_t0, suspect_sigma)
+            naive_B_map_for_suspect = smooth_likelihood_grid(naive_B_crumb_likelihoods_map_raw, w_t0, suspect_sigma)
+
         ## Sophisticated
         self.logger.info("--- Simulating Level 2 (Sophisticated) ---")
+        # Suspect
         self.logger.info(f"Simulating {num_sample_paths_suspect} paths for suspect (sophisticated)...")
         
         params.naive_A_crumb_likelihoods_map = naive_A_map_for_suspect
@@ -114,6 +114,7 @@ class RSMSimulator(BaseSimulator):
         )
         save_sampled_paths_to_csv(sampled_data_soph, trial_name, self.param_log_dir, 'sophisticated')
 
+        # Detective
         self.logger.info(f"Simulating {num_sample_paths_for_detective} paths for detective (modeling suspect as sophisticated)...")
         if num_sample_paths_for_detective != num_sample_paths_suspect:
             sampled_data_for_soph_detective_calc = current_suspect_agent.simulate_suspect(
