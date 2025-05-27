@@ -27,7 +27,7 @@ def parse_args():
     # Empirical
     empirical = subparser.add_parser("empirical", help="Run empirical model")
     empirical.add_argument('--trial', type=str, default='snack1', help='which trial to run (default: `snack1`)')
-    empirical.add_argument('--paths', type=str, default='../../data/exp2_suspect/humans/human_paths.csv', help='Path to CSV containing empirical paths (default: `../../data/exp2_suspect/humans/human_paths.csv`)')
+    empirical.add_argument('--paths', type=str, default='../../data/suspect/humans/human_paths.csv', help='Path to CSV containing empirical paths (default: `../../data/suspect/humans/human_paths.csv`)')
     empirical.add_argument('--log-dir', type=str, default='../../results', help='data logging directory for model (default: `../../results`)')
     empirical.add_argument('--mismatched', action='store_true', help='Calculate naive preds using soph paths, and vice versa (default: False)')
 
@@ -45,7 +45,9 @@ def logger(args):
     log_filename = ""
     
     log_dir_base = args.log_dir
+    print(f"log_dir_base: {log_dir_base}")
     if not os.path.exists(log_dir_base):
+        logger.info(f"Creating log directory: {log_dir_base}")
         os.makedirs(log_dir_base)
     
     trial_id_for_log = args.trial if args.trial != 'all' else "all_trials"

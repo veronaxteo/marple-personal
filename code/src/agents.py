@@ -109,7 +109,6 @@ class Detective(Agent):
                     agent_full_sequences=full_sequences,
                     agent_middle_sequences=middle_sequences,
                     world_state=w_t0,
-                    door_close_prob=params.door_close_prob,
                     agent_type_being_simulated=agent_type,
                     chosen_plant_spots_for_sequences=current_chosen_plant_spots
                 )

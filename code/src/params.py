@@ -5,8 +5,8 @@ from typing import Optional, Dict, Any
 class SimulationParams:
     command: str
     trial: str
-    log_dir: str
-    max_steps: int
+    log_dir: Optional[str] = None
+    max_steps: Optional[int] = None
     w: Optional[float] = None
     n_temp: Optional[float] = None
     s_temp: Optional[float] = None 

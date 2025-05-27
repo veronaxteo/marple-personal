@@ -18,11 +18,7 @@ class BaseSimulator:
         self.logger = logging.getLogger(self.__class__.__name__)
 
     def run_trial(self, trial_file: str, trial_name: str, w_t0: World, params: SimulationParams) -> dict:
-        """
-        Placeholder for trial-specific logic.
-        To be implemented by subclasses.
-        """
-        raise NotImplementedError("Subclasses must implement _run_trial")
+        raise NotImplementedError("Subclasses must implement `run_trial()`")
 
     def run(self) -> list:
         self.logger.info(f"Starting simulation for {self.__class__.__name__}...")
@@ -240,9 +236,7 @@ class UniformSimulator(BaseSimulator):
         suspect_agent = Suspect(id='suspect_uniform', data_type='visual', params=params)
         detective_agent = Detective(id='detective_uniform', data_type='visual', params=params)
 
-        simple_paths_A_seqs, simple_paths_B_seqs = load_simple_path_sequences(
-            self.log_dir_base, trial_name, w_t0, params.max_steps
-        )
+        simple_paths_A_seqs, simple_paths_B_seqs = load_simple_path_sequences(self.log_dir_base, trial_name, w_t0, params.max_steps)
 
         if simple_paths_A_seqs is None or simple_paths_B_seqs is None:
             self.logger.error(f"Simple path sequences not found or failed to load for {trial_name}. Skipping uniform trial.")
@@ -264,10 +258,10 @@ class UniformSimulator(BaseSimulator):
         sampled_data_uniform_detective = {}
         for agent_id_uniform, data_uniform in sampled_data_uniform_detective_raw.items():
             if 'full_sequences' in data_uniform:
-                 num_seqs_uniform = len(data_uniform['full_sequences'])
-                 data_uniform['chosen_plant_spots'] = [None] * num_seqs_uniform
+                num_seqs_uniform = len(data_uniform['full_sequences'])
+                data_uniform['chosen_plant_spots'] = [None] * num_seqs_uniform
             else:
-                 data_uniform['chosen_plant_spots'] = []
+                data_uniform['chosen_plant_spots'] = []
             sampled_data_uniform_detective[agent_id_uniform] = data_uniform
 
         uniform_predictions_dict, _, _ = detective_agent.simulate_detective(
