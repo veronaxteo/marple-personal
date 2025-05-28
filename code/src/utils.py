@@ -72,6 +72,7 @@ def get_simple_paths(graph, source, target, simple_path_cutoff):
         return []
     
 
+# TODO: clean up (maybe separate into two functions, one for loading if simple paths exist and one for computing them)
 def load_simple_path_sequences(log_dir_base, trial_name, world, max_steps):
     """
     Loads simple path sequences from .pkl files if they exist.
@@ -123,30 +124,6 @@ def load_simple_path_sequences(log_dir_base, trial_name, world, max_steps):
         return None, None
 
     return sequences_A, sequences_B
-    
-
-def combine_return_paths(fridge_to_door_paths, door_to_start_paths, max_combinations=None):
-    """Combine paths from fridge to door with paths from door to start to create complete return paths."""
-    logger = logging.getLogger(__name__)
-    
-    combined_paths = []
-    path_combinations = len(fridge_to_door_paths) * len(door_to_start_paths)
-    
-    if max_combinations and path_combinations > max_combinations:
-        logger.info(f"Sampling {max_combinations} return paths from {path_combinations} possible combinations")
-        for _ in range(max_combinations):
-            mid_path = random.choice(fridge_to_door_paths)
-            last_path = random.choice(door_to_start_paths)
-            combined_path = [tuple(coord) for coord in (mid_path[:-1] + last_path)]
-            combined_paths.append(combined_path)
-    else:
-        logger.info(f"Creating all {path_combinations} return paths")
-        for mid_path in fridge_to_door_paths:
-            for last_path in door_to_start_paths:
-                combined_path = [tuple(coord) for coord in (mid_path[:-1] + last_path)]
-                combined_paths.append(combined_path)
-                
-    return combined_paths
 
 
 def save_sampled_paths_to_csv(sampled_data, trial_name, param_log_dir, agent_type):
@@ -189,10 +166,6 @@ def save_sampled_paths_to_csv(sampled_data, trial_name, param_log_dir, agent_typ
     csv_path = os.path.join(param_log_dir, f'{trial_name}_sampled_paths_{agent_type}.csv')
     df.to_csv(csv_path, index=False)
     logger.info(f"Saved {len(df)} numbered path arrays to {csv_path}")
-
-
-def manhattan_distance(point1, point2):
-    return abs(point1[0] - point2[0]) + abs(point1[1] - point2[1])
 
 
 def smooth_likelihood_grid(raw_likelihoods_map: dict, world, sigma: float) -> dict:

@@ -1,7 +1,6 @@
 import json
 import networkx as nx
 import numpy as np
-import time
 import logging
 import os
 from joblib import Parallel, delayed
@@ -9,7 +8,7 @@ from utils import softmax_list_vals, normalized_slider_prediction, get_shortest_
 from globals import furniture_size
 
 
-class World():
+class World:
     """
     World representation:
     - Uses path sequences (lists of world tuples) internally for logic.
@@ -113,6 +112,7 @@ class World():
         """Returns the world coordinate tuple for the fridge access point."""
         if self.mission != 'get_snack': return None
         fridge_info = next((f for f in self.kitchen_info['furnitures']['initial'] if f['type'] == 'electric_refrigerator'), None)
+        
         if fridge_info is None: raise ValueError("Refrigerator not found for access point calculation.")
         fp = fridge_info['pos']
         fridge_access_point = (fp[0] - 1, fp[1] + 2)
@@ -138,26 +138,29 @@ class World():
         """Returns list of valid world coord tuples (wx, wy) for crumbs in kitchen."""
         if self._valid_kitchen_crumb_coords_world is not None:
             return self._valid_kitchen_crumb_coords_world
+        
         valid_coords = []
         kx, ky = self.kitchen_info['top']
         kw, kh = self.kitchen_info['size']
+        
         for world_y in range(ky, ky + kh):
             for world_x in range(kx, kx + kw):
                 coord_tuple = (world_x, world_y)
                 if self.graph.has_node(coord_tuple) and not self.graph.nodes[coord_tuple].get('is_door', False):
                     valid_coords.append(coord_tuple)
         self._valid_kitchen_crumb_coords_world = sorted(valid_coords)
+        
         return self._valid_kitchen_crumb_coords_world
 
 
     def get_closest_door_to_agent(self, agent_id):
         """Finds closest door node to agent start (world coords)."""
         agent_start_pos = self.start_coords.get(agent_id)
-        if not agent_start_pos: return None
+        
         door_nodes = [n for n, data in self.graph.nodes(data=True) if data.get('is_door')]
-        if not door_nodes: return None
         closest_door = None
         min_dist = float('inf')
+        
         for door_pos in door_nodes:
             try:
                 dist = nx.shortest_path_length(self.graph, source=agent_start_pos, target=door_pos)
@@ -171,8 +174,10 @@ class World():
     def get_subgoals(self, agent_id):
         """Get subgoals sequence (world coords tuples) for an agent."""
         start_pos = self.start_coords.get(agent_id)
+
         if not start_pos: raise ValueError(f"Start pos not found for agent {agent_id}")
         subgoals = [start_pos]
+
         if self.mission == 'get_snack':
             fridge_info = next((f for f in self.kitchen_info['furnitures']['initial'] if f['type'] == 'electric_refrigerator'), None)
             if fridge_info is None: raise ValueError("Refrigerator not found.")
@@ -182,31 +187,30 @@ class World():
             door_node = self.get_closest_door_to_agent(agent_id)
             if door_node is None: raise ValueError(f"No reachable door found for agent {agent_id}.")
             subgoals.extend([fridge_access_point, door_node])
+        
         subgoals.append(start_pos)
         return subgoals
 
 
     def get_subgoal_simple_path_sequences(self, agent_id, max_steps_middle):
         """Get simple path sequences (lists of world coord tuples) for subgoals."""
-        start_time = time.time(); logger = logging.getLogger(__name__)
-        try:
-            subgoals = self.get_subgoals(agent_id)
-            logger.info(f"Subgoals for agent {agent_id}: {subgoals}")
-            if len(subgoals) < 4: raise ValueError("Insufficient subgoals.")
-        except ValueError as e: logger.error(f"Error getting subgoals for {agent_id}: {e}"); return [[], [], []]
+        subgoals = self.get_subgoals(agent_id)
+
         results = Parallel(n_jobs=-1)(
-            [delayed(get_shortest_paths)(self.graph, subgoals[0], subgoals[1]),
-             delayed(get_simple_paths)(self.graph, subgoals[1], subgoals[2], max_steps_middle),
-             delayed(get_shortest_paths)(self.graph, subgoals[2], subgoals[3])]
+            [
+                delayed(get_shortest_paths)(self.graph, subgoals[0], subgoals[1]),
+                delayed(get_simple_paths)(self.graph, subgoals[1], subgoals[2], max_steps_middle),
+                delayed(get_shortest_paths)(self.graph, subgoals[2], subgoals[3])
+            ]
         )
         sequences_p1 = sorted(results[0]) if results[0] else []
         sequences_p2 = sorted(results[1]) if results[1] else []
         sequences_p3 = sorted(results[2]) if results[2] else []
-        logger.info(f"Paths per segment {agent_id}: {len(sequences_p1)}, {len(sequences_p2)}, {len(sequences_p3)}")
-        logger.info(f"Pathfinding time ({agent_id}): {time.time() - start_time:.2f}s")
+        
         return [sequences_p1, sequences_p2, sequences_p3]
 
 
+    # TODO: clean up
     def get_sample_paths(self, agent_id: str, simple_path_sequences: list, num_sample_paths: int, agent_type: str, 
                         naive_A_crumb_likelihoods_map: dict, naive_B_crumb_likelihoods_map: dict, 
                         w: float, temp: float, noisy_planting_sigma: float):
@@ -234,7 +238,7 @@ class World():
             if max_len > min_len:
                 rescaled_lengths = (middle_path_lengths - min_len) / (max_len - min_len)  # rescale to [0, 1]
 
-            # Crumb planting
+            # Crumb planting (for sophisticated agents only)
             path_utilities = []
             path_optimal_plant_spots = [] 
 
@@ -275,6 +279,7 @@ class World():
 
                         # TODO: clean and make concise
                         for tile in valid_planting_spots_on_path:
+                            # essentially just gets the naive detective's likelihood values (and hence slider preds)
                             l_A_at_tile = naive_A_crumb_likelihoods_map.get(tile, 0.0)
                             l_B_at_tile = naive_B_crumb_likelihoods_map.get(tile, 0.0)
                             
@@ -346,6 +351,7 @@ class World():
         num_last = len(sequences_p3)
 
         for _ in range(num_sample_paths):
+            # TODO: make more efficient
             # Sample indices
             idx1 = np.random.randint(0, num_first)
             idx3 = np.random.randint(0, num_last)

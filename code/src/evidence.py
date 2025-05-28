@@ -110,9 +110,8 @@ class AudioEvidence(Evidence):
     Attributes:
         world_state (inherited): World, world state
         params (inherited): dict, parameters for the evidence
-        raw_audio_tokens (list): raw audio tokens
-        compressed_audio_tokens (list): compressed audio tokens
-        audio_tokens (list): audio tokens
+        raw_audio_tokens (list): raw audio tokens, e.g. ['step', 'step', 'step', 'fridge_opened', 'snack_picked_up', 'fridge_closed', 'step', 'step', 'step']
+        compressed_audio_tokens (list): compressed audio tokens, e.g. [3, 'fridge_opened', 'snack_picked_up', 'fridge_closed', 3]
     """
     def __init__(self, audio_tokens):
         super().__init__()
@@ -120,17 +119,15 @@ class AudioEvidence(Evidence):
         self.compressed_audio_tokens = []
         self.parse_audio_tokens()
 
-    def parse_audio_tokens(self):
-        """Compresses sequences of 'step' tokens and identifies key events."""
-        if not self.raw_audio_tokens:
-            self.compressed_audio_tokens = []
-            return
 
+    def parse_audio_tokens(self):
+        """Compresses sequences of tokens and identifies key events."""
         tokens = self.raw_audio_tokens
         temp_parsed_tokens = []
         current_step_count = 0
 
-        # First pass: group consecutive steps and keep discrete events
+        # Group consecutive steps and keep discrete events
+        # TODO: make more concise
         for token in tokens:
             if token == 'step':
                 current_step_count += 1
@@ -139,17 +136,15 @@ class AudioEvidence(Evidence):
                     temp_parsed_tokens.append(current_step_count)
                 temp_parsed_tokens.append(token)
                 current_step_count = 0
-        if current_step_count > 0: # Add any trailing steps
+        if current_step_count > 0:  # add any trailing steps
             temp_parsed_tokens.append(current_step_count)
         
-        # Second pass: ensure the specific [steps, event, event, event, steps] structure
+        # Ensure specific [steps, event, event, event, steps] structure
         final_compressed = []
         
         # 1. Steps to fridge
         if temp_parsed_tokens and isinstance(temp_parsed_tokens[0], int):
             final_compressed.append(temp_parsed_tokens.pop(0))
-        else:
-            final_compressed.append(0) # No steps before first discrete event
 
         # 2. Fridge events
         expected_fridge_events = ['fridge_opened', 'snack_picked_up', 'fridge_closed']
@@ -163,20 +158,14 @@ class AudioEvidence(Evidence):
         # 3. Steps from fridge
         if temp_parsed_tokens and isinstance(temp_parsed_tokens[0], int):
             final_compressed.append(temp_parsed_tokens.pop(0))
-        else:
-            final_compressed.append(0) # No steps after last discrete event
             
         self.compressed_audio_tokens = final_compressed
 
 
-    def get_audio_tokens_for_path(world_state, path_coords, agent_id, door_close_prob=0.0):
+    def get_audio_tokens_for_path(world_state, path_coords):
         """Generates a raw list of audio tokens for an agent traversing a path."""
         raw_tokens = []
-        
         fridge_access_point = world_state.get_fridge_access_point() 
-
-        if not path_coords:
-            return []
 
         fridge_event_added = False
         for i, coord in enumerate(path_coords):
@@ -185,28 +174,26 @@ class AudioEvidence(Evidence):
 
             if coord == fridge_access_point and not fridge_event_added:
                 raw_tokens.extend(['fridge_opened', 'snack_picked_up', 'fridge_closed'])
-                fridge_event_added = True # Ensure fridge events are added only once per path traversal
+                fridge_event_added = True
             
         return raw_tokens
 
 
     def get_segmented_audio_likelihood(ground_truth_compressed_tokens, path_compressed_tokens, sigma_factor=0.2):
-        """Computes likelihood of path audio given ground truth audio."""
-        # Check discrete events (indices 1, 2, 3)
-        gt_events = ground_truth_compressed_tokens[1:4]
-        path_events = path_compressed_tokens[1:4]
-
-        gt_steps_to = ground_truth_compressed_tokens[0]
-        gt_steps_from = ground_truth_compressed_tokens[4]
-        path_steps_to = path_compressed_tokens[0]
-        path_steps_from = path_compressed_tokens[4]
+        """Computes likelihood of path audio given ground truth (gt) audio."""
+        # TODO: currently hardcoded (will need to change if we add more events/sounds)
+        gt_steps_to = ground_truth_compressed_tokens.pop(0)
+        gt_steps_from = ground_truth_compressed_tokens[-1]
+        path_steps_to = path_compressed_tokens.pop(0)
+        path_steps_from = path_compressed_tokens[-1]
 
         segment_likelihoods = []
 
+        # TODO: will need to revise sigma factor / gaussian log
         # Likelihood for steps to fridge
         sigma_to = max(1.0, gt_steps_to * sigma_factor) if gt_steps_to > 0 else 1.0
         lik_to = norm.pdf(path_steps_to, loc=gt_steps_to, scale=sigma_to)
-        max_lik_to = norm.pdf(gt_steps_to, loc=gt_steps_to, scale=sigma_to) if gt_steps_to > 0 else norm.pdf(0, loc=0, scale=1.0) # Handle 0 steps
+        max_lik_to = norm.pdf(gt_steps_to, loc=gt_steps_to, scale=sigma_to) if gt_steps_to > 0 else norm.pdf(0, loc=0, scale=1.0) 
         segment_likelihoods.append(lik_to / max_lik_to if max_lik_to > 0 else (1.0 if gt_steps_to == path_steps_to else 0.0))
 
         # Likelihood for steps from fridge

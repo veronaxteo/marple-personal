@@ -8,7 +8,7 @@ from evidence import VisualEvidence, AudioEvidence
 from utils import normalized_slider_prediction, smooth_likelihood_grid
 
 
-class Agent():
+class Agent:
     """
     The base agent class.
 

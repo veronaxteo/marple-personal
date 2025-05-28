@@ -1,9 +1,9 @@
 import logging
 import pandas as pd
 import ast
-from utils import load_simple_path_sequences, save_sampled_paths_to_csv, smooth_likelihood_grid
-from world import World
-from agents import Suspect, Detective
+from test_utils import save_sampled_paths_to_csv, smooth_likelihood_grid
+from test_world import World, load_simple_path_sequences
+from test_agents import Suspect, Detective
 from params import SimulationParams
 import traceback
 
@@ -17,11 +17,11 @@ class BaseSimulator:
         self.trials_to_run = trials_to_run
         self.logger = logging.getLogger(self.__class__.__name__)
 
-    def run_trial(self, trial_file: str, trial_name: str, w_t0: World, params: SimulationParams) -> dict:
+    def run_trial(self, trial_file: str, trial_name: str, w_t0: World) -> dict:
         raise NotImplementedError("Subclasses must implement `run_trial()`")
 
     def run(self) -> list:
-        self.logger.info(f"Starting simulation for {self.__class__.__name__}...")
+        self.logger.info(f"Starting simulation for {self.__class__.__name__} with evidence: {self.params.evidence}...")
         all_results = []
 
         for trial_file in self.trials_to_run:
@@ -29,7 +29,7 @@ class BaseSimulator:
             self.logger.info(f"===== Running Trial: {trial_name} =====")
             try:
                 w_t0 = World.initialize_world_start(trial_file)
-                trial_result = self.run_trial(trial_file, trial_name, w_t0, self.params)
+                trial_result = self.run_trial(trial_file, trial_name, w_t0)
                 if trial_result:
                     all_results.append(trial_result)
                 self.logger.info(f"===== Finished Trial: {trial_name} =====")
@@ -45,100 +45,149 @@ class RSMSimulator(BaseSimulator):
     def __init__(self, args, log_dir_base, param_log_dir, params: SimulationParams, trials_to_run):
         super().__init__(args, log_dir_base, param_log_dir, params, trials_to_run)
 
-    def run_trial(self, trial_file: str, trial_name: str, w_t0: World, params: SimulationParams) -> dict:
-        num_sample_paths_suspect = params.sample_paths_suspect
-        num_sample_paths_for_detective = params.sample_paths_detective
+    def run_trial(self, trial_file: str, trial_name: str, w_t0: World) -> dict:
+        num_sample_paths_suspect = self.params.sample_paths_suspect
+        num_sample_paths_for_detective = self.params.sample_paths_detective
 
-        self.logger.info(f"Simulating {num_sample_paths_suspect} suspect paths per agent type.")
+        self.logger.info(f"Simulating {num_sample_paths_suspect} suspect paths per agent type for {self.params.evidence} evidence.")
         self.logger.info(f"Simulating {num_sample_paths_for_detective} suspect paths for detective calculation.")
 
-        simple_paths_A_seqs, simple_paths_B_seqs = load_simple_path_sequences(
-            self.log_dir_base, trial_name, w_t0, params.max_steps
-        )
-        if simple_paths_A_seqs is None or simple_paths_B_seqs is None:
-            self.logger.error(f"Failed to load or compute simple paths for {trial_name}. Skipping.")
+        # Load simple path sequences for both agents A and B for the current trial
+        # load_simple_path_sequences now returns (paths_A_tuple, paths_B_tuple)
+        # where each tuple is (p1_seqs, p2_seqs, p3_seqs, p_fs_seqs)
+        paths_A_segments, paths_B_segments = load_simple_path_sequences(self.log_dir_base, trial_name, w_t0, self.params, self.params.max_steps)
+
+        if not paths_A_segments or not paths_B_segments: # Basic check, detailed checks are in load_simple_path_sequences
+            self.logger.error(f"Failed to load or compute simple path sequences for {trial_name}. Skipping.")
             return None
-
-        current_suspect_agent = Suspect(id='suspect_rsm', data_type='visual', params=params)
-        current_detective_agent = Detective(id='detective_rsm', data_type='visual', params=params)
-
-        ## Naive
-        self.logger.info("--- Simulating Level 1 (Naive Agent) ---")
-        # Suspect
-        self.logger.info(f"Simulating {num_sample_paths_suspect} paths for suspect (naive)...")
-        sampled_data_naive = current_suspect_agent.simulate_suspect(
-            w_t0, simple_paths_A_seqs, simple_paths_B_seqs, 'naive',
-            num_sample_paths_suspect, params
-        )
-        save_sampled_paths_to_csv(sampled_data_naive, trial_name, self.param_log_dir, 'naive')
-
-        # Detective
-        self.logger.info(f"Simulating {num_sample_paths_for_detective} paths for detective (modeling suspect as naive)...")
-        sampled_data_for_naive_detective_calc = current_suspect_agent.simulate_suspect(
-            w_t0, simple_paths_A_seqs, simple_paths_B_seqs, 'naive',
-            num_sample_paths_for_detective, params
-        )
-
-        # likelihoods and predictions
-        naive_slider_predictions_dict, naive_A_crumb_likelihoods_map_raw, naive_B_crumb_likelihoods_map_raw = current_detective_agent.simulate_detective(
-            w_t0, trial_name, sampled_data_for_naive_detective_calc, 'naive', params, self.param_log_dir
-        )
-
-        if not naive_slider_predictions_dict:
-            self.logger.warning(f"Skipping sophisticated agent for {trial_name} due to empty naive predictions.")
-            return None
-
-        suspect_sigma = params.soph_suspect_sigma
-        naive_A_map_for_suspect = naive_A_crumb_likelihoods_map_raw
-        naive_B_map_for_suspect = naive_B_crumb_likelihoods_map_raw
-
-        if suspect_sigma > 0:
-            self.logger.info(f"Smoothing naive likelihood maps for sophisticated suspect with sigma: {suspect_sigma}")
-            naive_A_map_for_suspect = smooth_likelihood_grid(naive_A_crumb_likelihoods_map_raw, w_t0, suspect_sigma)
-            naive_B_map_for_suspect = smooth_likelihood_grid(naive_B_crumb_likelihoods_map_raw, w_t0, suspect_sigma)
-
-        ## Sophisticated
-        self.logger.info("--- Simulating Level 2 (Sophisticated) ---")
-        # Suspect
-        self.logger.info(f"Simulating {num_sample_paths_suspect} paths for suspect (sophisticated)...")
         
-        params.naive_A_crumb_likelihoods_map = naive_A_map_for_suspect
-        params.naive_B_crumb_likelihoods_map = naive_B_map_for_suspect
+        # Unpack for clarity, though direct indexing like paths_A_segments[0] for P1_A is also possible
+        simple_paths_A_p1, simple_paths_A_p2, simple_paths_A_p3, simple_paths_A_fs = paths_A_segments
+        simple_paths_B_p1, simple_paths_B_p2, simple_paths_B_p3, simple_paths_B_fs = paths_B_segments
 
-        sampled_data_soph = current_suspect_agent.simulate_suspect(
-            w_t0, simple_paths_A_seqs, simple_paths_B_seqs, 'sophisticated',
-            num_sample_paths_suspect, params
+        # For audio evidence, the suspect simulation will now use simple_paths_A_p1 and simple_paths_A_fs (and similar for B)
+        # The current Suspect.simulate_suspect takes a single 'simple_path_sequences' argument.
+        # This will need to be adapted or the information packed differently if simulate_suspect needs all segments.
+        # For the new audio logic in World.get_sample_paths, it expects a tuple of sequences:
+        # (candidate_paths_to_fridge, candidate_paths_from_fridge_to_start)
+        # So, we should pass these specific segments for audio.
+
+        # For visual, it used (P1, P2, P3).
+        # We need to decide how to pass these to simulate_suspect and then to get_sample_paths.
+        # For now, let's assemble what each evidence type would primarily expect for its path choices.
+
+        # This is what Suspect.simulate_suspect expects: a list/tuple of path segments
+        # For visual, it was (p1, p2, p3)
+        # For new audio, it will be (p1, p_fs)
+        # We'll pass all 4 for now, and let get_sample_paths pick what it needs based on evidence type.
+        # This avoids changing simulate_suspect signature immediately.
+        # The World.get_sample_paths will then unpack this tuple of 4 lists.
+
+        current_suspect_agent = Suspect(id='suspect_rsm', data_type=self.params.evidence, params=self.params)
+        current_detective_agent = Detective(id='detective_rsm', data_type=self.params.evidence, params=self.params)
+
+        ## Naive Simulation
+        self.logger.info("--- Simulating Level 1 (Naive Agent) ---")
+        # Naive Suspects (generates paths based on naive utility)
+        self.logger.info(f"Simulating {num_sample_paths_suspect} paths for NAIVE suspect...")
+        sampled_data_naive_suspect = current_suspect_agent.simulate_suspect(
+            w_t0, 
+            paths_A_segments, # Pass the tuple (p1,p2,p3,p_fs) for A
+            paths_B_segments, # Pass the tuple (p1,p2,p3,p_fs) for B
+            'naive',
+            num_sample_paths_suspect
         )
-        save_sampled_paths_to_csv(sampled_data_soph, trial_name, self.param_log_dir, 'sophisticated')
+        save_sampled_paths_to_csv(sampled_data_naive_suspect, trial_name, self.param_log_dir, 'naive')
 
-        # Detective
-        self.logger.info(f"Simulating {num_sample_paths_for_detective} paths for detective (modeling suspect as sophisticated)...")
+        # Naive Detective
+        self.logger.info(f"Simulating {num_sample_paths_for_detective} paths for NAIVE DETECTIVE's internal model...")
+        sampled_data_for_naive_detective_model = current_suspect_agent.simulate_suspect(
+            w_t0, 
+            paths_A_segments, 
+            paths_B_segments, 
+            'naive',
+            num_sample_paths_for_detective
+        )
+
+        naive_predictions_output, naive_A_model_for_soph_suspect, naive_B_model_for_soph_suspect = current_detective_agent.simulate_detective(
+            w_t0, trial_name, sampled_data_for_naive_detective_model, 'naive', self.param_log_dir
+        )
+
+        if self.params.evidence == 'visual':
+            smoothed_A_map = naive_A_model_for_soph_suspect
+            smoothed_B_map = naive_B_model_for_soph_suspect
+            if self.params.soph_suspect_sigma > 0:
+                self.logger.info(f"Smoothing naive visual likelihood maps for sophisticated suspect with sigma: {self.params.soph_suspect_sigma}")
+                smoothed_A_map = smooth_likelihood_grid(naive_A_model_for_soph_suspect, w_t0, self.params.soph_suspect_sigma)
+                smoothed_B_map = smooth_likelihood_grid(naive_B_model_for_soph_suspect, w_t0, self.params.soph_suspect_sigma)
+            self.params.naive_A_visual_likelihoods_map = smoothed_A_map
+            self.params.naive_B_visual_likelihoods_map = smoothed_B_map
+        elif self.params.evidence == 'audio':
+            # naive_A_model_for_soph_suspect is now (list_of_to_steps, list_of_from_steps)
+            # naive_B_model_for_soph_suspect is now (list_of_to_steps, list_of_from_steps)
+            self.params.naive_A_to_fridge_steps_model = naive_A_model_for_soph_suspect[0]
+            self.params.naive_A_from_fridge_steps_model = naive_A_model_for_soph_suspect[1]
+            self.params.naive_B_to_fridge_steps_model = naive_B_model_for_soph_suspect[0]
+            self.params.naive_B_from_fridge_steps_model = naive_B_model_for_soph_suspect[1]
+            self.logger.info(f"Naive audio models for sophisticated suspect: "
+                             f"A_to ({len(self.params.naive_A_to_fridge_steps_model)} steps), "
+                             f"A_from ({len(self.params.naive_A_from_fridge_steps_model)} steps), "
+                             f"B_to ({len(self.params.naive_B_to_fridge_steps_model)} steps), "
+                             f"B_from ({len(self.params.naive_B_from_fridge_steps_model)} steps).")
+            self.logger.info(f"Content of naive_predictions_output for trial {trial_name} (audio): {naive_predictions_output}")
+
+        ## Sophisticated Simulation
+        self.logger.info("--- Simulating Level 2 (Sophisticated) ---")
+        # Sophisticated Suspect (generates paths considering the naive detective's model)
+        self.logger.info(f"Simulating {num_sample_paths_suspect} paths for SOPHISTICATED suspect...")
+        # Sophisticated suspect internally uses self.params.naive_X_visual_likelihoods_map or self.params.naive_X_audio_sequences
+        sampled_data_soph_suspect = current_suspect_agent.simulate_suspect(
+            w_t0, 
+            paths_A_segments, 
+            paths_B_segments, 
+            'sophisticated',
+            num_sample_paths_suspect
+        )
+        save_sampled_paths_to_csv(sampled_data_soph_suspect, trial_name, self.param_log_dir, 'sophisticated')
+
+        # Sophisticated Detective (models sophisticated suspects)
+        # This run is to get the final predictions about sophisticated suspects.
+        self.logger.info(f"Simulating {num_sample_paths_for_detective} paths for SOPHISTICATED DETECTIVE's internal model...")
+        # The paths generated here are by *sophisticated suspects* because the sophisticated detective models sophisticated suspects.
+        # Re-sample if num_sample_paths_for_detective is different, or reuse if same.
         if num_sample_paths_for_detective != num_sample_paths_suspect:
-            sampled_data_for_soph_detective_calc = current_suspect_agent.simulate_suspect(
-                w_t0, simple_paths_A_seqs, simple_paths_B_seqs, 'sophisticated',
-                num_sample_paths_for_detective, params
+            sampled_data_for_soph_detective_model = current_suspect_agent.simulate_suspect(
+                w_t0, 
+                paths_A_segments, 
+                paths_B_segments, 
+                'sophisticated',
+                num_sample_paths_for_detective
             )
         else:
-            sampled_data_for_soph_detective_calc = sampled_data_soph
+            sampled_data_for_soph_detective_model = sampled_data_soph_suspect
 
-        soph_slider_predictions_dict, _, _ = current_detective_agent.simulate_detective(
-            w_t0, trial_name, sampled_data_for_soph_detective_calc,
-            'sophisticated', params, self.param_log_dir
+        soph_predictions_output, _, _ = current_detective_agent.simulate_detective( # We only need predictions here
+            w_t0, trial_name, sampled_data_for_soph_detective_model,
+            'sophisticated', self.param_log_dir
         )
 
         return {
             "trial": trial_name,
-            "naive_predictions": naive_slider_predictions_dict,
-            "sophisticated_predictions": soph_slider_predictions_dict
+            f"naive_{self.params.evidence}_predictions": naive_predictions_output,
+            f"sophisticated_{self.params.evidence}_predictions": soph_predictions_output
         }
 
 
 class EmpiricalSimulator(BaseSimulator):
     def __init__(self, args, log_dir_base, param_log_dir, params: SimulationParams, trials_to_run):
         super().__init__(args, log_dir_base, param_log_dir, params, trials_to_run)
-        self.logger.info(f"Loading empirical paths from: {self.args.paths}")
-        self.logger.info(f"Mismatched analysis: {self.args.mismatched}")
-        self.all_empirical_paths_df = self._load_empirical_data(self.args.paths)
+        self.logger.info(f"Loading empirical paths from: {self.params.paths}")
+        self.logger.info(f"Mismatched analysis: {self.params.mismatched}")
+        if not self.params.paths:
+            self.logger.error("Empirical path CSV file not specified in params.")
+            self.all_empirical_paths_df = pd.DataFrame()
+        else:
+            self.all_empirical_paths_df = self._load_empirical_data(self.params.paths)
 
     def _load_empirical_data(self, paths_csv: str) -> pd.DataFrame:
         try:
