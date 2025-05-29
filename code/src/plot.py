@@ -17,32 +17,39 @@ def plot_suspect_paths_heatmap(trial_name, param_log_dir, agent_type_to_plot, ev
     """
     Generates and saves heatmaps of sampled path frequencies for suspects A and B.
     evidence_type: 'visual' or 'audio'
-    path_segment_type: 'to_fridge', 'return_from_fridge' (for visual, this is full path from fridge; for audio, this is p2)
+    path_segment_type: 'to_fridge', 'return_from_fridge' (for visual and audio both support both types)
     """
     logger = logging.getLogger(__name__)
 
     trial_file_name = f"{trial_name}_A1.json"
     world = World.initialize_world_start(trial_file_name)
-    kitchen_width = world.kitchen_width
-    kitchen_height = world.kitchen_height
+    
+    # Use full apartment dimensions for both audio and visual evidence
+    plot_width = world.width
+    plot_height = world.height
+    coord_offset_x = 0
+    coord_offset_y = 0
 
     csv_file_path = os.path.join(param_log_dir, f"{trial_name}_sampled_paths_{agent_type_to_plot}.csv")
     paths_df = pd.read_csv(csv_file_path)
 
-    path_column_name = 'full_sequence_world_coords' # Default for visual return
-    plot_title_segment = "Return Path Tile Counts (from Fridge)"
-
-    if evidence_type == 'audio':
-        if path_segment_type == 'to_fridge':
+    # Determine path column and title based on evidence type and segment type
+    if path_segment_type == 'to_fridge':
+        if evidence_type == 'audio':
             path_column_name = 'to_fridge_sequence_world_coords'
-            plot_title_segment = "Path to Fridge Tile Counts"
-        elif path_segment_type == 'return_from_fridge': # For audio, this means p2 (middle_sequence)
-            path_column_name = 'middle_sequence_world_coords'
+        elif evidence_type == 'visual':
+            path_column_name = 'full_sequence_world_coords'  # Will slice to fridge
+        plot_title_segment = "Path to Fridge Tile Counts"
+    elif path_segment_type == 'return_from_fridge':
+        if evidence_type == 'audio':
+            path_column_name = 'middle_sequence_world_coords'  # From fridge to door
             plot_title_segment = "Path from Fridge to Door Tile Counts"
-    elif evidence_type == 'visual':
-        # Visual always plots return from fridge using full_sequence and slicing from fridge_access_point
+        elif evidence_type == 'visual':
+            path_column_name = 'full_sequence_world_coords'  # Will slice from fridge
+            plot_title_segment = "Return Path Tile Counts (from Fridge)"
+    else:
         path_column_name = 'full_sequence_world_coords'
-        plot_title_segment = "Return Path Tile Counts (from Fridge)"
+        plot_title_segment = "Full Path Tile Counts"
 
     fridge_access_point = world.get_fridge_access_point()
 
@@ -50,7 +57,7 @@ def plot_suspect_paths_heatmap(trial_name, param_log_dir, agent_type_to_plot, ev
         agent_df = paths_df[paths_df['agent'] == agent_id]
 
         agent_paths_str_list = agent_df[path_column_name].tolist()
-        heatmap_grid = np.zeros((kitchen_height, kitchen_width))
+        heatmap_grid = np.zeros((plot_height, plot_width))
         paths_processed_count = 0
 
         for path_str in agent_paths_str_list:
@@ -58,7 +65,7 @@ def plot_suspect_paths_heatmap(trial_name, param_log_dir, agent_type_to_plot, ev
             
             path_coords_to_plot = []
             if evidence_type == 'visual' and fridge_access_point and path_coords_world_full:
-                # Visual: plot from fridge onwards from the 'full_sequence_world_coords'
+                # Visual: handle path slicing based on segment type
                 fridge_ap_tuple = tuple(fridge_access_point)
                 path_coords_world_tuples = [tuple(map(int, coord)) for coord in path_coords_world_full if isinstance(coord, (list, tuple)) and len(coord) == 2]
                 fridge_idx = -1
@@ -66,39 +73,51 @@ def plot_suspect_paths_heatmap(trial_name, param_log_dir, agent_type_to_plot, ev
                     if coord_tuple == fridge_ap_tuple:
                         fridge_idx = i
                         break
+                
                 if fridge_idx != -1:
-                    path_coords_to_plot = path_coords_world_tuples[fridge_idx:]
-                else: # Should not happen if fridge_access_point is valid and path goes through it
+                    if path_segment_type == 'to_fridge':
+                        # Plot from start to fridge (inclusive)
+                        path_coords_to_plot = path_coords_world_tuples[:fridge_idx + 1]
+                    elif path_segment_type == 'return_from_fridge':
+                        # Plot from fridge to end
+                        path_coords_to_plot = path_coords_world_tuples[fridge_idx:]
+                    else:
+                        path_coords_to_plot = path_coords_world_tuples
+                else:
+                    # Fallback if fridge not found
                     path_coords_to_plot = path_coords_world_tuples
             elif evidence_type == 'audio':
-                # Audio: plot the selected segment directly (to_fridge or middle_sequence)
+                # Audio: plot the selected segment directly using full apartment
                 path_coords_to_plot = [tuple(map(int, coord)) for coord in path_coords_world_full if isinstance(coord, (list, tuple)) and len(coord) == 2]
-            elif not fridge_access_point: # Fallback for worlds without fridge or if path_segment_type logic is bypassed
-                 path_coords_to_plot = [tuple(map(int, coord)) for coord in path_coords_world_full if isinstance(coord, (list, tuple)) and len(coord) == 2]
+            else:
+                # Fallback
+                path_coords_to_plot = [tuple(map(int, coord)) for coord in path_coords_world_full if isinstance(coord, (list, tuple)) and len(coord) == 2]
 
-            paths_processed_count +=1
+            paths_processed_count += 1
             for world_coord_tuple_anytype in path_coords_to_plot: 
                 if isinstance(world_coord_tuple_anytype, (list, tuple)) and len(world_coord_tuple_anytype) == 2 and \
                    all(isinstance(c, (int, float)) for c in world_coord_tuple_anytype):
                     world_coord_tuple = tuple(map(int, world_coord_tuple_anytype))
-                    kitchen_coord = world.world_to_kitchen_coords(world_coord_tuple[0], world_coord_tuple[1])
-                    if kitchen_coord:
-                        kx, ky = kitchen_coord
-                        if 0 <= ky < kitchen_height and 0 <= kx < kitchen_width:
-                            heatmap_grid[ky, kx] += 1
+                    
+                    # For both audio and visual, plot all coordinates within apartment bounds
+                    plot_x = world_coord_tuple[0] - coord_offset_x
+                    plot_y = world_coord_tuple[1] - coord_offset_y
+                    if 0 <= plot_x < plot_width and 0 <= plot_y < plot_height:
+                        heatmap_grid[plot_y, plot_x] += 1
 
-        plt.figure(figsize=(10, 4))
+        plt.figure(figsize=(12, 8))  # Use same size for both evidence types
         
         # Set color based on agent_id
         plot_cmap = "Blues" if agent_id == 'A' else "Greens"
         
         sns.heatmap(heatmap_grid, annot=True, fmt=".0f", cmap=plot_cmap, cbar=True, linewidths=.5, linecolor='gray')
-        plt.title(f"Agent {agent_id} ({agent_type_to_plot.capitalize()}): {plot_title_segment} \n Trial: {trial_name}")
-        plt.xlabel("Kitchen X")
-        plt.ylabel("Kitchen Y")
         
-        plt.xticks(ticks=np.arange(0.5, kitchen_width, 1), labels=np.arange(1, kitchen_width + 1))
-        plt.yticks(ticks=np.arange(0.5, kitchen_height, 1), labels=np.arange(kitchen_height, 0, -1))
+        plt.title(f"Agent {agent_id} ({agent_type_to_plot.capitalize()}): {plot_title_segment} \n Trial: {trial_name} (Apartment Coordinates)")
+        plt.xlabel("Apartment X")
+        plt.ylabel("Apartment Y")
+        
+        plt.xticks(ticks=np.arange(0.5, plot_width, 1), labels=np.arange(1, plot_width + 1))
+        plt.yticks(ticks=np.arange(0.5, plot_height, 1), labels=np.arange(plot_height, 0, -1))
 
         heatmap_filename = os.path.join(param_log_dir, f"sampled_paths_heatmap_agent_{agent_id}_{agent_type_to_plot}_{path_segment_type}_{trial_name}.png")
         try:
@@ -121,8 +140,8 @@ def plot_suspect_crumb_planting_heatmap(trial_name, param_log_dir):
     world = World.initialize_world_start(trial_file_name)
     logger.info(f"Successfully loaded world for trial: {trial_name}")
 
-    kitchen_width = world.kitchen_width
-    kitchen_height = world.kitchen_height
+    kitchen_width = world.coordinate_mapper.kitchen_width
+    kitchen_height = world.coordinate_mapper.kitchen_height
 
     # Load chosen plant spots data from CSV
     csv_file_path = os.path.join(param_log_dir, f"{trial_name}_sampled_paths_sophisticated.csv")
@@ -175,9 +194,11 @@ def plot_suspect_crumb_planting_heatmap(trial_name, param_log_dir):
         plt.close()
 
 
-def plot_detective_predictions_heatmap(trial_name, param_log_dir, detective_agent_type):
+def plot_detective_predictions_heatmap(trial_name, param_log_dir, detective_agent_type, evidence_type='visual'):
     """
     Generates and saves a heatmap of detective slider predictions for each crumb location.
+    For visual evidence, uses kitchen coordinates. For audio evidence, this function may not be applicable
+    as audio evidence doesn't have spatial crumb locations.
     """
     logger = logging.getLogger(__name__)
     logging.basicConfig(level=logging.INFO)
@@ -186,10 +207,21 @@ def plot_detective_predictions_heatmap(trial_name, param_log_dir, detective_agen
     world = World.initialize_world_start(trial_file_name)
     logger.info(f"Successfully loaded world for trial: {trial_name} to plot detective predictions.")
     
-    kitchen_width = world.kitchen_width
-    kitchen_height = world.kitchen_height
+    # Detective predictions are typically for visual evidence with crumb locations
+    # For audio evidence, this heatmap doesn't make sense as predictions are about audio sequences, not spatial locations
+    if evidence_type == 'audio':
+        logger.info(f"Skipping detective predictions heatmap for audio evidence (no spatial crumb locations)")
+        return
+    
+    kitchen_width = world.coordinate_mapper.kitchen_width
+    kitchen_height = world.coordinate_mapper.kitchen_height
 
-    json_file_path = os.path.join(param_log_dir, f"detective_preds_{trial_name}_{detective_agent_type}.json")
+    # Updated to new naming convention: {trial_name}_{agent_type}_{evidence}_predictions.json
+    json_file_path = os.path.join(param_log_dir, f"{trial_name}_{detective_agent_type}_{evidence_type}_predictions.json")
+    
+    if not os.path.exists(json_file_path):
+        logger.warning(f"Prediction file not found: {json_file_path}")
+        return
 
     with open(json_file_path, 'r') as f:
         predictions_data = json.load(f)
@@ -198,24 +230,36 @@ def plot_detective_predictions_heatmap(trial_name, param_log_dir, detective_agen
     heatmap_grid = np.full((kitchen_height, kitchen_width), np.nan) # Initialize with NaN for missing spots
 
     for pred_entry in predictions_data:
-        world_coord_tuple = tuple(pred_entry.get("crumb_location_world_coords", []))
-        slider_prediction = pred_entry.get("slider_prediction")
+        # Handle both old and new data structures
+        world_coord_tuple = None
+        slider_prediction = None
         
-        kitchen_coord = world.world_to_kitchen_coords(world_coord_tuple[0], world_coord_tuple[1])
-        kx, ky = kitchen_coord # kx = col, ky = row
-        if 0 <= ky < kitchen_height and 0 <= kx < kitchen_width:
-            heatmap_grid[ky, kx] = slider_prediction
+        # Try new data structure first (from VisualEvidenceProcessor)
+        if "crumb_coord" in pred_entry:
+            world_coord_tuple = tuple(pred_entry["crumb_coord"])
+            slider_prediction = pred_entry.get("prediction")
+        # Fallback to old data structure
+        elif "crumb_location_world_coords" in pred_entry:
+            world_coord_tuple = tuple(pred_entry["crumb_location_world_coords"])
+            slider_prediction = pred_entry.get("slider_prediction", pred_entry.get("slider"))
+        
+        if world_coord_tuple and len(world_coord_tuple) == 2 and slider_prediction is not None:
+            kitchen_coord = world.world_to_kitchen_coords(world_coord_tuple[0], world_coord_tuple[1])
+            if kitchen_coord:
+                kx, ky = kitchen_coord # kx = col, ky = row
+                if 0 <= ky < kitchen_height and 0 <= kx < kitchen_width:
+                    heatmap_grid[ky, kx] = slider_prediction
 
     plt.figure(figsize=(10, 4))
     sns.heatmap(heatmap_grid, annot=True, fmt=".1f", cmap="coolwarm", center=0, cbar=True, vmin=-50, vmax=50,  linewidths=.5, linecolor='gray')
-    plt.title(f"Detective Predictions ({detective_agent_type.capitalize()})\nTrial: {trial_name}, Slider: (-50: A, 50: B)")
+    plt.title(f"Detective Predictions ({detective_agent_type.capitalize()}, {evidence_type.capitalize()})\nTrial: {trial_name}, Slider: (-50: A, 50: B)")
     plt.xlabel("Kitchen X")
     plt.ylabel("Kitchen Y")
     
     plt.xticks(ticks=np.arange(0.5, kitchen_width, 1), labels=np.arange(1, kitchen_width + 1))
     plt.yticks(ticks=np.arange(0.5, kitchen_height, 1), labels=np.arange(kitchen_height, 0, -1)) # Flipped y-axis
 
-    heatmap_filename = os.path.join(param_log_dir, f"detective_preds_heatmap_{detective_agent_type}_{trial_name}.png")
+    heatmap_filename = os.path.join(param_log_dir, f"detective_preds_heatmap_{detective_agent_type}_{evidence_type}_{trial_name}.png")
     plt.savefig(heatmap_filename)
     logger.info(f"Saved detective predictions heatmap to {heatmap_filename}")
     plt.close()
@@ -226,8 +270,9 @@ def main(dir_to_search):
     if not logger.hasHandlers():
         logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s', stream=sys.stdout)
 
-    agent_types_for_path_plots = ['naive', 'sophisticated']
-    detective_model_types_for_plots = ['naive', 'sophisticated'] 
+    # Updated to include uniform agent type from UniformSimulator
+    agent_types_for_path_plots = ['naive', 'sophisticated', 'uniform']
+    detective_model_types_for_plots = ['naive', 'sophisticated', 'uniform'] 
 
     processed_trials_for_detective_plots = set()
 
@@ -280,20 +325,32 @@ def main(dir_to_search):
                     plot_suspect_paths_heatmap(trial_name, param_log_dir, agent_type, evidence_type='audio', path_segment_type='return_from_fridge')
                 
                 elif evidence_type == 'visual':
+                    # Plot both path segments for visual evidence, just like audio
+                    plot_suspect_paths_heatmap(trial_name, param_log_dir, agent_type, evidence_type='visual', path_segment_type='to_fridge')
                     plot_suspect_paths_heatmap(trial_name, param_log_dir, agent_type, evidence_type='visual', path_segment_type='return_from_fridge')
                     if agent_type == 'sophisticated':
                         plot_suspect_crumb_planting_heatmap(trial_name, param_log_dir)
                 
-                # Detective prediction heatmaps (naive and sophisticated)
+                # Detective prediction heatmaps (naive, sophisticated, and uniform)
                 trial_context_key = (trial_name, param_log_dir)
                 if trial_context_key not in processed_trials_for_detective_plots:
                     for detective_model_type in detective_model_types_for_plots:
-                        json_pred_file = f"detective_preds_{trial_name}_{detective_model_type}.json"
+                        # Updated to new naming convention: {trial_name}_{agent_type}_{evidence}_predictions.json
+                        # For uniform, check both uniform_predictions.json and {trial_name}_uniform_{evidence}_predictions.json
+                        json_pred_file = f"{trial_name}_{detective_model_type}_{evidence_type}_predictions.json"
                         json_pred_path = os.path.join(param_log_dir, json_pred_file)
                         
+                        # Alternative filename for uniform (legacy format)
+                        if detective_model_type == 'uniform' and not os.path.exists(json_pred_path):
+                            json_pred_file_alt = f"{trial_name}_uniform_predictions.json"
+                            json_pred_path_alt = os.path.join(param_log_dir, json_pred_file_alt)
+                            if os.path.exists(json_pred_path_alt):
+                                json_pred_path = json_pred_path_alt
+                                json_pred_file = json_pred_file_alt
+                        
                         if os.path.exists(json_pred_path):
-                            logger.info(f"Plotting detective predictions for model '{detective_model_type}', trial '{trial_name}'.")
-                            plot_detective_predictions_heatmap(trial_name, param_log_dir, detective_model_type)
+                            logger.info(f"Plotting detective predictions for model '{detective_model_type}', trial '{trial_name}', evidence '{evidence_type}'.")
+                            plot_detective_predictions_heatmap(trial_name, param_log_dir, detective_model_type, evidence_type)
                     
                     processed_trials_for_detective_plots.add(trial_context_key)
 

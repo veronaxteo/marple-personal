@@ -1,14 +1,16 @@
 import logging
 import pandas as pd
 import ast
-from utils import load_simple_path_sequences, save_sampled_paths_to_csv, smooth_likelihood_grid
-from world import World
+from utils import save_sampled_paths_to_csv, smooth_likelihood_grid
+from world import World, load_simple_path_sequences
 from agents import Suspect, Detective
 from params import SimulationParams
 import traceback
 
 
 class BaseSimulator:
+    """Base class for all simulation types"""
+    
     def __init__(self, args, log_dir_base, param_log_dir, params: SimulationParams, trials_to_run):
         self.args = args
         self.log_dir_base = log_dir_base
@@ -17,19 +19,22 @@ class BaseSimulator:
         self.trials_to_run = trials_to_run
         self.logger = logging.getLogger(self.__class__.__name__)
 
-    def run_trial(self, trial_file: str, trial_name: str, w_t0: World, params: SimulationParams) -> dict:
+    def run_trial(self, trial_file: str, trial_name: str, world: World) -> dict:
+        """Run simulation for a single trial. Must be implemented by subclasses"""
         raise NotImplementedError("Subclasses must implement `run_trial()`")
 
     def run(self) -> list:
-        self.logger.info(f"Starting simulation for {self.__class__.__name__}...")
+        """Run simulation for all trials"""
+        self.logger.info(f"Starting {self.__class__.__name__} simulation with {self.params.evidence} evidence")
         all_results = []
 
         for trial_file in self.trials_to_run:
             trial_name = trial_file.split('_A1.json')[0]
             self.logger.info(f"===== Running Trial: {trial_name} =====")
+            
             try:
-                w_t0 = World.initialize_world_start(trial_file)
-                trial_result = self.run_trial(trial_file, trial_name, w_t0, self.params)
+                world = World.initialize_world_start(trial_file)
+                trial_result = self.run_trial(trial_file, trial_name, world)
                 if trial_result:
                     all_results.append(trial_result)
                 self.logger.info(f"===== Finished Trial: {trial_name} =====")
@@ -37,240 +42,246 @@ class BaseSimulator:
                 self.logger.error(f"Error processing trial {trial_name}: {e}")
                 self.logger.error(traceback.format_exc())
         
-        self.logger.info(f"Simulation for {self.__class__.__name__} completed.")
+        self.logger.info(f"{self.__class__.__name__} simulation completed")
         return all_results
 
 
 class RSMSimulator(BaseSimulator):
-    def __init__(self, args, log_dir_base, param_log_dir, params: SimulationParams, trials_to_run):
-        super().__init__(args, log_dir_base, param_log_dir, params, trials_to_run)
+    """Rational Speech-act Model simulator for suspects and detectives"""
+    
+    def run_trial(self, trial_file: str, trial_name: str, world: World) -> dict:
+        """Run RSM simulation for a single trial"""
+        num_suspect_paths = self.params.sample_paths_suspect
+        num_detective_paths = self.params.sample_paths_detective
 
-    def run_trial(self, trial_file: str, trial_name: str, w_t0: World, params: SimulationParams) -> dict:
-        num_sample_paths_suspect = params.sample_paths_suspect
-        num_sample_paths_for_detective = params.sample_paths_detective
+        self.logger.info(f"Generating {num_suspect_paths} suspect paths and {num_detective_paths} detective paths")
 
-        self.logger.info(f"Simulating {num_sample_paths_suspect} suspect paths per agent type.")
-        self.logger.info(f"Simulating {num_sample_paths_for_detective} suspect paths for detective calculation.")
-
-        simple_paths_A_seqs, simple_paths_B_seqs = load_simple_path_sequences(
-            self.log_dir_base, trial_name, w_t0, params.max_steps
+        # Load path sequences for both agents
+        paths_A, paths_B = load_simple_path_sequences(
+            self.log_dir_base, trial_name, world, self.params, self.params.max_steps
         )
-        if simple_paths_A_seqs is None or simple_paths_B_seqs is None:
-            self.logger.error(f"Failed to load or compute simple paths for {trial_name}. Skipping.")
+
+        if not paths_A or not paths_B:
+            self.logger.error(f"Failed to load path sequences for {trial_name}")
             return None
 
-        current_suspect_agent = Suspect(id='suspect_rsm', data_type='visual', params=params)
-        current_detective_agent = Detective(id='detective_rsm', data_type='visual', params=params)
+        # Initialize agents
+        suspect = Suspect('suspect_rsm', self.params.evidence, self.params)
+        detective = Detective('detective_rsm', self.params.evidence, self.params)
 
-        ## Naive
+        # Level 1: Naive agent simulation
         self.logger.info("--- Simulating Level 1 (Naive Agent) ---")
-        # Suspect
-        self.logger.info(f"Simulating {num_sample_paths_suspect} paths for suspect (naive)...")
-        sampled_data_naive = current_suspect_agent.simulate_suspect(
-            w_t0, simple_paths_A_seqs, simple_paths_B_seqs, 'naive',
-            num_sample_paths_suspect, params
-        )
-        save_sampled_paths_to_csv(sampled_data_naive, trial_name, self.param_log_dir, 'naive')
-
-        # Detective
-        self.logger.info(f"Simulating {num_sample_paths_for_detective} paths for detective (modeling suspect as naive)...")
-        sampled_data_for_naive_detective_calc = current_suspect_agent.simulate_suspect(
-            w_t0, simple_paths_A_seqs, simple_paths_B_seqs, 'naive',
-            num_sample_paths_for_detective, params
-        )
-
-        # likelihoods and predictions
-        naive_slider_predictions_dict, naive_A_crumb_likelihoods_map_raw, naive_B_crumb_likelihoods_map_raw = current_detective_agent.simulate_detective(
-            w_t0, trial_name, sampled_data_for_naive_detective_calc, 'naive', params, self.param_log_dir
-        )
-
-        if not naive_slider_predictions_dict:
-            self.logger.warning(f"Skipping sophisticated agent for {trial_name} due to empty naive predictions.")
-            return None
-
-        suspect_sigma = params.soph_suspect_sigma
-        naive_A_map_for_suspect = naive_A_crumb_likelihoods_map_raw
-        naive_B_map_for_suspect = naive_B_crumb_likelihoods_map_raw
-
-        if suspect_sigma > 0:
-            self.logger.info(f"Smoothing naive likelihood maps for sophisticated suspect with sigma: {suspect_sigma}")
-            naive_A_map_for_suspect = smooth_likelihood_grid(naive_A_crumb_likelihoods_map_raw, w_t0, suspect_sigma)
-            naive_B_map_for_suspect = smooth_likelihood_grid(naive_B_crumb_likelihoods_map_raw, w_t0, suspect_sigma)
-
-        ## Sophisticated
-        self.logger.info("--- Simulating Level 2 (Sophisticated) ---")
-        # Suspect
-        self.logger.info(f"Simulating {num_sample_paths_suspect} paths for suspect (sophisticated)...")
         
-        params.naive_A_crumb_likelihoods_map = naive_A_map_for_suspect
-        params.naive_B_crumb_likelihoods_map = naive_B_map_for_suspect
+        naive_suspect_data = suspect.simulate_suspect(world, paths_A, paths_B, 'naive', num_suspect_paths)
+        save_sampled_paths_to_csv(naive_suspect_data, trial_name, self.param_log_dir, 'naive')
 
-        sampled_data_soph = current_suspect_agent.simulate_suspect(
-            w_t0, simple_paths_A_seqs, simple_paths_B_seqs, 'sophisticated',
-            num_sample_paths_suspect, params
-        )
-        save_sampled_paths_to_csv(sampled_data_soph, trial_name, self.param_log_dir, 'sophisticated')
+        naive_detective_data = suspect.simulate_suspect(world, paths_A, paths_B, 'naive', num_detective_paths)
 
-        # Detective
-        self.logger.info(f"Simulating {num_sample_paths_for_detective} paths for detective (modeling suspect as sophisticated)...")
-        if num_sample_paths_for_detective != num_sample_paths_suspect:
-            sampled_data_for_soph_detective_calc = current_suspect_agent.simulate_suspect(
-                w_t0, simple_paths_A_seqs, simple_paths_B_seqs, 'sophisticated',
-                num_sample_paths_for_detective, params
-            )
+        naive_predictions, naive_A_model, naive_B_model = detective.simulate_detective(world, trial_name, naive_detective_data, 'naive', self.param_log_dir)
+
+        # Process naive models for sophisticated suspects
+        self._process_naive_models_for_sophisticated(naive_A_model, naive_B_model, world)
+
+        # Level 2: Sophisticated agent simulation
+        self.logger.info("--- Simulating Level 2 (Sophisticated Agent) ---")
+        
+        soph_suspect_data = suspect.simulate_suspect(world, paths_A, paths_B, 'sophisticated', num_suspect_paths)
+        save_sampled_paths_to_csv(soph_suspect_data, trial_name, self.param_log_dir, 'sophisticated')
+
+        # Generate sophisticated detective predictions
+        if num_detective_paths != num_suspect_paths:
+            soph_detective_data = suspect.simulate_suspect(world, paths_A, paths_B, 'sophisticated', num_detective_paths)
         else:
-            sampled_data_for_soph_detective_calc = sampled_data_soph
+            soph_detective_data = soph_suspect_data
 
-        soph_slider_predictions_dict, _, _ = current_detective_agent.simulate_detective(
-            w_t0, trial_name, sampled_data_for_soph_detective_calc,
-            'sophisticated', params, self.param_log_dir
-        )
+        soph_predictions, _, _ = detective.simulate_detective(world, trial_name, soph_detective_data, 'sophisticated', self.param_log_dir)
 
         return {
             "trial": trial_name,
-            "naive_predictions": naive_slider_predictions_dict,
-            "sophisticated_predictions": soph_slider_predictions_dict
+            f"naive_{self.params.evidence}_predictions": naive_predictions,
+            f"sophisticated_{self.params.evidence}_predictions": soph_predictions
         }
+
+    def _process_naive_models_for_sophisticated(self, naive_A_model, naive_B_model, world):
+        """Process naive detective models for use by sophisticated suspects"""
+        if self.params.evidence == 'visual':
+            # Apply smoothing if specified
+            smoothed_A_map = naive_A_model
+            smoothed_B_map = naive_B_model
+            
+            if self.params.soph_suspect_sigma > 0:
+                self.logger.info(f"Smoothing visual likelihood maps (sigma={self.params.soph_suspect_sigma})")
+                smoothed_A_map = smooth_likelihood_grid(naive_A_model, world, self.params.soph_suspect_sigma)
+                smoothed_B_map = smooth_likelihood_grid(naive_B_model, world, self.params.soph_suspect_sigma)
+            
+            self.params.naive_A_visual_likelihoods_map = smoothed_A_map
+            self.params.naive_B_visual_likelihoods_map = smoothed_B_map
+            
+        elif self.params.evidence == 'audio':
+            # Store audio step models for sophisticated suspects
+            self.params.naive_A_to_fridge_steps_model = naive_A_model[0]
+            self.params.naive_A_from_fridge_steps_model = naive_A_model[1]
+            self.params.naive_B_to_fridge_steps_model = naive_B_model[0]
+            self.params.naive_B_from_fridge_steps_model = naive_B_model[1]
+            
+            self.logger.info(f"Audio models: A_to({len(self.params.naive_A_to_fridge_steps_model)}), "
+                           f"A_from({len(self.params.naive_A_from_fridge_steps_model)}), "
+                           f"B_to({len(self.params.naive_B_to_fridge_steps_model)}), "
+                           f"B_from({len(self.params.naive_B_from_fridge_steps_model)})")
 
 
 class EmpiricalSimulator(BaseSimulator):
+    """Simulator for empirical data analysis"""
+    
     def __init__(self, args, log_dir_base, param_log_dir, params: SimulationParams, trials_to_run):
         super().__init__(args, log_dir_base, param_log_dir, params, trials_to_run)
-        self.logger.info(f"Loading empirical paths from: {self.args.paths}")
-        self.logger.info(f"Mismatched analysis: {self.args.mismatched}")
-        self.all_empirical_paths_df = self._load_empirical_data(self.args.paths)
+        self.logger.info(f"Loading empirical paths from: {self.params.paths}")
+        self.logger.info(f"Mismatched analysis: {self.params.mismatched}")
+        
+        if not self.params.paths:
+            self.logger.error("Empirical path CSV file not specified")
+            self.empirical_data = pd.DataFrame()
+        else:
+            self.empirical_data = self._load_empirical_data(self.params.paths)
 
     def _load_empirical_data(self, paths_csv: str) -> pd.DataFrame:
+        """Load and validate empirical path data"""
         try:
             df = pd.read_csv(paths_csv)
             required_cols = ['trial', 'agent', 'agent_type', 'full_sequence_world_coords', 'middle_sequence_world_coords']
             missing_cols = [col for col in required_cols if col not in df.columns]
+            
             if missing_cols:
-                self.logger.error(f"Empirical CSV missing required columns: {missing_cols}")
+                self.logger.error(f"Missing required columns: {missing_cols}")
                 exit()
 
-            full_path_col = 'full_sequence_world_coords'
-            middle_path_col = 'middle_sequence_world_coords'
-            df[full_path_col] = df[full_path_col].apply(ast.literal_eval)
-            df[middle_path_col] = df[middle_path_col].apply(ast.literal_eval)
-            self.logger.info(f"Successfully loaded and parsed {len(df)} empirical paths.")
+            # Parse coordinate columns
+            df['full_sequence_world_coords'] = df['full_sequence_world_coords'].apply(ast.literal_eval)
+            df['middle_sequence_world_coords'] = df['middle_sequence_world_coords'].apply(ast.literal_eval)
+            
+            self.logger.info(f"Loaded {len(df)} empirical paths")
             return df
+            
         except FileNotFoundError:
-            self.logger.error(f"Empirical path file not found at: {paths_csv}")
+            self.logger.error(f"Empirical file not found: {paths_csv}")
             exit()
         except Exception as e:
             self.logger.error(f"Error loading empirical data: {e}")
             exit()
 
-    def run_trial(self, trial_file: str, trial_name: str, w_t0: World, params: SimulationParams) -> dict:
-        if self.all_empirical_paths_df is None:
-            self.logger.error("Empirical data not loaded. Skipping trial.")
+    def run_trial(self, trial_file: str, trial_name: str, world: World) -> dict:
+        """Run empirical analysis for a single trial"""
+        trial_data = self.empirical_data[self.empirical_data['trial'] == trial_name]
+
+        if trial_data.empty:
+            self.logger.warning(f"No empirical data found for trial {trial_name}")
             return None
 
-        trial_df_all = self.all_empirical_paths_df[self.all_empirical_paths_df['trial'] == trial_name]
+        detective = Detective('detective_empirical', 'visual', self.params)
 
-        if trial_df_all.empty:
-            self.logger.warning(f"No empirical paths found for trial {trial_name} in the CSV. Skipping.")
-            return None
-
-        detective_agent = Detective(id='detective_empirical', data_type='visual', params=params)
-
-        path_data_by_type = {
-            'naive': {'A': {'full_sequences': [], 'middle_sequences': [], 'chosen_plant_spots': []}, 'B': {'full_sequences': [], 'middle_sequences': [], 'chosen_plant_spots': []}},
-            'sophisticated': {'A': {'full_sequences': [], 'middle_sequences': [], 'chosen_plant_spots': []}, 'B': {'full_sequences': [], 'middle_sequences': [], 'chosen_plant_spots': []}}
-        }
-        has_data = {'naive': False, 'sophisticated': False}
-
-        for agent_type_in_data in ['naive', 'sophisticated']:
-            type_df = trial_df_all[trial_df_all['agent_type'] == agent_type_in_data]
-            if not type_df.empty:
-                has_data[agent_type_in_data] = True
-                for _, row in type_df.iterrows():
-                    agent = row['agent']
-                    full_sequence = row['full_sequence_world_coords']
-                    middle_sequence = row['middle_sequence_world_coords']
-                    if agent in path_data_by_type[agent_type_in_data]:
-                        path_data_by_type[agent_type_in_data][agent]['full_sequences'].append(full_sequence)
-                        path_data_by_type[agent_type_in_data][agent]['middle_sequences'].append(middle_sequence)
-                        path_data_by_type[agent_type_in_data][agent]['chosen_plant_spots'].append(None) 
-                    else:
-                        self.logger.warning(f"Unknown agent '{agent}' found in {agent_type_in_data} data for trial {trial_name}. Skipping row.")
-
-        trial_results_payload = {"predictions": {}}
+        # Organize path data by agent type
+        path_data = self._organize_path_data(trial_data)
+        
+        # Run predictions for both naive and sophisticated
+        results = {"trial": trial_name, "predictions": {}}
+        
         for prediction_type in ['naive', 'sophisticated']:
-            source_data_type = 'sophisticated' if self.args.mismatched and prediction_type == 'naive' else \
-                             'naive' if self.args.mismatched and prediction_type == 'sophisticated' else \
-                             prediction_type
-
-            self.logger.info(f"Calculating {prediction_type.capitalize()} predictions using {source_data_type.capitalize()} empirical paths ---")
-
-            if not has_data[source_data_type]:
-                self.logger.warning(f"Source data type '{source_data_type}' needed for {prediction_type} prediction is missing for trial {trial_name}. Skipping.")
-                trial_results_payload["predictions"][prediction_type] = {}
+            source_type = self._get_source_type(prediction_type)
+            
+            if not self._has_data_for_type(path_data, source_type):
+                self.logger.warning(f"No {source_type} data for {prediction_type} prediction in {trial_name}")
+                results["predictions"][prediction_type] = {}
                 continue
 
-            data_for_detective = path_data_by_type[source_data_type]
-            self.logger.info(f"Using paths: Agent A (Full: {len(data_for_detective['A']['full_sequences'])}) "
-                               f"Agent B (Full: {len(data_for_detective['B']['full_sequences'])}) from {source_data_type} data.")
-
-            predictions_dict_empirical, _, _ = detective_agent.simulate_detective(
-                w_t0, trial_name, data_for_detective,
-                agent_type=prediction_type,
-                params=params,
-                param_log_dir=self.param_log_dir,
-                source_data_type=source_data_type,
-                mismatched_run=self.args.mismatched
+            self.logger.info(f"Computing {prediction_type} predictions using {source_type} data")
+            
+            predictions, _, _ = detective.simulate_detective(
+                world, trial_name, path_data[source_type], prediction_type, self.param_log_dir,
+                source_data_type=source_type, mismatched_run=self.args.mismatched
             )
-            trial_results_payload["predictions"][prediction_type] = predictions_dict_empirical
+            results["predictions"][prediction_type] = predictions
         
-        return {"trial": trial_name, **trial_results_payload}
+        return results
+
+    def _organize_path_data(self, trial_data):
+        """Organize trial data by agent type"""
+        path_data = {
+            'naive': {'A': {'full_sequences': [], 'middle_sequences': [], 'chosen_plant_spots': []}, 
+                     'B': {'full_sequences': [], 'middle_sequences': [], 'chosen_plant_spots': []}},
+            'sophisticated': {'A': {'full_sequences': [], 'middle_sequences': [], 'chosen_plant_spots': []}, 
+                            'B': {'full_sequences': [], 'middle_sequences': [], 'chosen_plant_spots': []}}
+        }
+
+        for _, row in trial_data.iterrows():
+            agent_type = row['agent_type']
+            agent = row['agent']
+            
+            if agent_type in path_data and agent in path_data[agent_type]:
+                path_data[agent_type][agent]['full_sequences'].append(row['full_sequence_world_coords'])
+                path_data[agent_type][agent]['middle_sequences'].append(row['middle_sequence_world_coords'])
+                path_data[agent_type][agent]['chosen_plant_spots'].append(None)
+
+        return path_data
+
+    def _get_source_type(self, prediction_type):
+        """Determine source data type based on prediction type and mismatch setting"""
+        if self.args.mismatched:
+            return 'sophisticated' if prediction_type == 'naive' else 'naive'
+        return prediction_type
+
+    def _has_data_for_type(self, path_data, data_type):
+        """Check if path data exists for given type"""
+        return (data_type in path_data and 
+                any(len(path_data[data_type][agent]['full_sequences']) > 0 
+                    for agent in ['A', 'B']))
 
 
 class UniformSimulator(BaseSimulator):
-    def __init__(self, args, log_dir_base, param_log_dir, params: SimulationParams, trials_to_run):
-        super().__init__(args, log_dir_base, param_log_dir, params, trials_to_run)
+    """Uniform random simulator for baseline comparisons"""
+    
+    def run_trial(self, trial_file: str, trial_name: str, world: World) -> dict:
+        """Run uniform simulation for a single trial"""
+        num_suspect_paths = self.params.sample_paths_suspect
+        num_detective_paths = self.params.sample_paths_detective
 
-    def run_trial(self, trial_file: str, trial_name: str, w_t0: World, params: SimulationParams) -> dict:
-        num_uniform_samples_suspect = params.sample_paths_suspect
-        num_uniform_samples_detective = params.sample_paths_detective
+        suspect = Suspect('suspect_uniform', 'visual', self.params)
+        detective = Detective('detective_uniform', 'visual', self.params)
 
-        suspect_agent = Suspect(id='suspect_uniform', data_type='visual', params=params)
-        detective_agent = Detective(id='detective_uniform', data_type='visual', params=params)
+        # Load path sequences
+        paths_A, paths_B = load_simple_path_sequences(
+            self.log_dir_base, trial_name, world, self.params, self.params.max_steps
+        )
 
-        simple_paths_A_seqs, simple_paths_B_seqs = load_simple_path_sequences(self.log_dir_base, trial_name, w_t0, params.max_steps)
-
-        if simple_paths_A_seqs is None or simple_paths_B_seqs is None:
-            self.logger.error(f"Simple path sequences not found or failed to load for {trial_name}. Skipping uniform trial.")
+        if not paths_A or not paths_B:
+            self.logger.error(f"Path sequences not found for {trial_name}")
             return None
 
-        self.logger.info(f"Simulating {num_uniform_samples_suspect} paths for suspect (uniform)...")
-        sampled_data_uniform_save = suspect_agent.simulate_suspect(
-            w_t0, simple_paths_A_seqs, simple_paths_B_seqs, 'uniform',
-            num_uniform_samples_suspect, params
+        # Generate uniform suspect paths
+        self.logger.info(f"Generating {num_suspect_paths} uniform suspect paths")
+        suspect_data = suspect.simulate_suspect(
+            world, paths_A, paths_B, 'uniform', num_suspect_paths
         )
-        save_sampled_paths_to_csv(sampled_data_uniform_save, trial_name, self.param_log_dir, 'uniform')
+        save_sampled_paths_to_csv(suspect_data, trial_name, self.param_log_dir, 'uniform')
 
-        self.logger.info(f"Simulating {num_uniform_samples_detective} paths for detective (uniform)...")
-        sampled_data_uniform_detective_raw = suspect_agent.simulate_suspect(
-            w_t0, simple_paths_A_seqs, simple_paths_B_seqs, 'uniform',
-            num_uniform_samples_detective, params
+        # Generate uniform detective paths
+        self.logger.info(f"Generating {num_detective_paths} uniform detective paths")
+        detective_data = suspect.simulate_suspect(
+            world, paths_A, paths_B, 'uniform', num_detective_paths
         )
         
-        sampled_data_uniform_detective = {}
-        for agent_id_uniform, data_uniform in sampled_data_uniform_detective_raw.items():
-            if 'full_sequences' in data_uniform:
-                num_seqs_uniform = len(data_uniform['full_sequences'])
-                data_uniform['chosen_plant_spots'] = [None] * num_seqs_uniform
+        # Add plant spots for visual evidence compatibility
+        for agent_id, data in detective_data.items():
+            if 'full_sequences' in data:
+                data['chosen_plant_spots'] = [None] * len(data['full_sequences'])
             else:
-                data_uniform['chosen_plant_spots'] = []
-            sampled_data_uniform_detective[agent_id_uniform] = data_uniform
+                data['chosen_plant_spots'] = []
 
-        uniform_predictions_dict, _, _ = detective_agent.simulate_detective(
-            w_t0, trial_name, sampled_data_uniform_detective,
-            'uniform', params, self.param_log_dir
+        # Generate uniform predictions
+        predictions, _, _ = detective.simulate_detective(
+            world, trial_name, detective_data, 'uniform', self.param_log_dir
         )
 
         return {
             "trial": trial_name,
-            "uniform_predictions": uniform_predictions_dict
+            "uniform_predictions": predictions
         }

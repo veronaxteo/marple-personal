@@ -1,178 +1,212 @@
-import numpy as np
 import json
+import logging
 import os
 
 from world import World
 from params import SimulationParams
-from evidence import VisualEvidence, AudioEvidence
-from utils import normalized_slider_prediction, smooth_likelihood_grid
+from utils import ensure_serializable
+from evidence_processors import create_evidence_processor
+from config import SimulationConfig, PathSamplingTask, DetectiveTaskConfig
 
 
 class Agent:
     """
-    The base agent class.
-
-    Attributes:
-        id (str): agent id (e.g., 'A', 'B')
-        data_type (str): type of data to use for evidence (e.g., visual, audio, multimodal)
-        params (dict): parameters for the agent, including agent type (e.g., naive, sophisticated), w, temp, etc.
+    Base agent class for suspects and detectives
     """
-    def __init__(self, id, data_type, params):
-        self.id = id
+    def __init__(self, agent_id: str, data_type: str, params: SimulationParams):
+        self.id = agent_id
         self.data_type = data_type
         self.params = params
+        self.logger = logging.getLogger(f"{self.__class__.__name__}[{self.id}]")
 
 
 class Suspect(Agent):
     """
-    Suspect agent class. 
-
-    Attributes:
-        id (inherited): str, agent id (e.g., 'A', 'B')
-        data_type (inherited): str, type of data to use for evidence (e.g., visual, audio, multimodal)
-        params (inherited): dict, parameters for the agent, including agent type (e.g., naive, sophisticated), w, temp, etc.
+    Suspect agent that generates paths based on utility functions
     """
-    def __init__(self, id, data_type, params):
-        super().__init__(id, data_type, params)
-        self.world_state = None
-        self.audio_evidence = None
-        self.visual_evidence = None
-
-
-    def simulate_suspect(self, w_t0: World, 
-                        simple_paths_A_seqs: list, simple_paths_B_seqs: list,
-                        agent_type: str, num_sample_paths: int, params: SimulationParams) -> dict:
-        """Simulates suspect paths by sampling from simple paths according to the agents' cost functions."""
-        sampled_data = {}
-        for agent in ['A', 'B']:
-            simple_sequences = simple_paths_A_seqs if agent == 'A' else simple_paths_B_seqs
-
-            call_args = {
-                'agent_id': agent,
-                'simple_path_sequences': simple_sequences,
-                'num_sample_paths': num_sample_paths,
-                'agent_type': agent_type,
-                'naive_A_crumb_likelihoods_map': None,
-                'naive_B_crumb_likelihoods_map': None,
-                'w': 0.0,
-                'temp': 0.0,
-                'noisy_planting_sigma': 0.0
-            }
-
-            if agent_type == 'sophisticated':
-                call_args['w'] = params.w if params.w is not None else 0.0
-                call_args['temp'] = params.s_temp if params.s_temp is not None else 0.0
-                call_args['naive_A_crumb_likelihoods_map'] = params.naive_A_crumb_likelihoods_map
-                call_args['naive_B_crumb_likelihoods_map'] = params.naive_B_crumb_likelihoods_map
-                call_args['noisy_planting_sigma'] = params.noisy_planting_sigma if params.noisy_planting_sigma is not None else 0.0
-
-            elif agent_type == 'naive':
-                call_args['w'] = params.w if params.w is not None else 0.0
-                call_args['temp'] = params.n_temp if params.n_temp is not None else 0.0
-
-            result = w_t0.get_sample_paths(**call_args)
-            sampled_data[agent] = result
-            
-        return sampled_data
+    
+    def simulate_suspect(self, world: World, paths_A: list, paths_B: list, 
+                        agent_type: str, num_sample_paths: int) -> dict:
+        """Generate suspect paths for both agents"""
+        self.logger.info(f"Simulating {agent_type} suspect paths using {self.params.evidence} evidence")
+        
+        # Create simulation config from params
+        config = self._create_config_from_params(num_sample_paths)
+        
+        # Create path sampling tasks
+        task_A = PathSamplingTask(
+            world=world,
+            agent_id='A',
+            simple_path_sequences=paths_A,
+            config=config,
+            agent_type=agent_type
+        )
+        
+        task_B = PathSamplingTask(
+            world=world,
+            agent_id='B', 
+            simple_path_sequences=paths_B,
+            config=config,
+            agent_type=agent_type
+        )
+        
+        agent_A_data = world.path_sampler.sample_paths(task_A)
+        agent_B_data = world.path_sampler.sample_paths(task_B)
+        
+        return {'A': agent_A_data, 'B': agent_B_data}
+    
+    def _create_config_from_params(self, num_sample_paths: int) -> SimulationConfig:
+        """Convert legacy SimulationParams to new SimulationConfig"""
+        if self.params.evidence == 'visual':
+            config = SimulationConfig.create_visual_config(
+                trial_name="temp",
+                cost_weight=self.params.w,
+                naive_temp=self.params.n_temp,
+                sophisticated_temp=self.params.s_temp,
+                max_steps=self.params.max_steps
+            )
+        elif self.params.evidence == 'audio':
+            config = SimulationConfig.create_audio_config(
+                trial_name="temp",
+                cost_weight=self.params.w,
+                naive_temp=self.params.n_temp,
+                sophisticated_temp=self.params.s_temp,
+                max_steps=self.params.max_steps,
+                audio_similarity_sigma=self.params.audio_segment_similarity_sigma
+            )
+        else:
+            raise ValueError(f"Unsupported evidence type: {self.params.evidence}")
+        
+        # Override sampling numbers
+        config.sampling.num_suspect_paths = num_sample_paths
+        config.sampling.noisy_planting_sigma = self.params.noisy_planting_sigma
+        
+        # Transfer sophisticated agent models if available
+        if hasattr(self.params, 'naive_A_visual_likelihoods_map'):
+            config.evidence.naive_A_visual_likelihoods_map = self.params.naive_A_visual_likelihoods_map
+        if hasattr(self.params, 'naive_B_visual_likelihoods_map'):
+            config.evidence.naive_B_visual_likelihoods_map = self.params.naive_B_visual_likelihoods_map
+        if hasattr(self.params, 'naive_A_to_fridge_steps_model'):
+            config.evidence.naive_A_to_fridge_steps_model = self.params.naive_A_to_fridge_steps_model
+        if hasattr(self.params, 'naive_A_from_fridge_steps_model'):
+            config.evidence.naive_A_from_fridge_steps_model = self.params.naive_A_from_fridge_steps_model
+        if hasattr(self.params, 'naive_B_to_fridge_steps_model'):
+            config.evidence.naive_B_to_fridge_steps_model = self.params.naive_B_to_fridge_steps_model
+        if hasattr(self.params, 'naive_B_from_fridge_steps_model'):
+            config.evidence.naive_B_from_fridge_steps_model = self.params.naive_B_from_fridge_steps_model
+        
+        return config
 
 
 class Detective(Agent):
     """
-    Detective agent class. 
-
-    Attributes:
-        id (inherited): str, agent id (e.g., 'A', 'B')
-        data_type (inherited): str, type of data to use for evidence (e.g., visual, audio, multimodal)
-        params (inherited): dict, parameters for the agent, including agent type (e.g., naive, sophisticated), w, temp, etc.
+    Detective agent that makes predictions about suspects based on evidence
     """
-    def __init__(self, id, data_type, params):
-        super().__init__(id, data_type, params)
-        self.world_state = None
-        self.audio_evidence = None
-        self.visual_evidence = None
     
+    def __init__(self, agent_id: str, data_type: str, params: SimulationParams):
+        super().__init__(agent_id, data_type, params)
+        self.evidence_processor = create_evidence_processor(self.params.evidence)
+    
+    def simulate_detective(self, world: World, trial_name: str, sampled_data: dict, 
+                         agent_type_being_simulated: str, param_log_dir: str,
+                         source_data_type: str = None, mismatched_run: bool = None) -> tuple:
+        """
+        Generate detective predictions about suspects
+        
+        Returns:
+            tuple: (predictions_dict, agent_A_model_output, agent_B_model_output)
+        """
+        self.logger.info(f"Simulating detective modeling {agent_type_being_simulated} suspects "
+                        f"using {self.params.evidence} evidence")
 
-    def compute_likelihoods(self, w_t0: World, sampled_data: dict, agent_type: str, params: SimulationParams, possible_crumb_coords: list) -> tuple[dict, dict]:
-        raw_likelihoods_A = {}
-        raw_likelihoods_B = {}
-        for crumb_tuple in possible_crumb_coords:
-            for agent_id in ['A', 'B']:
-                agent_specific_data = sampled_data.get(agent_id, {})
-                full_sequences = agent_specific_data.get('full_sequences', [])
-                middle_sequences = agent_specific_data.get('middle_sequences', [])
-                chosen_plant_spots = agent_specific_data.get('chosen_plant_spots', [])
-                
-                current_chosen_plant_spots = chosen_plant_spots if agent_type == 'sophisticated' else None
+        # Create config from params
+        config = self._create_config_from_params()
+        
+        # Create detective task configuration
+        task = DetectiveTaskConfig(
+            world=world,
+            trial_name=trial_name,
+            sampled_data=sampled_data,
+            agent_type_being_simulated=agent_type_being_simulated,
+            config=config,
+            source_data_type=source_data_type,
+            mismatched_run=mismatched_run,
+            param_log_dir=param_log_dir
+        )
+        
+        # Compute predictions using evidence processor
+        result = self.evidence_processor.compute_detective_predictions(task)
 
-                likelihood_value = VisualEvidence.get_visual_evidence_likelihood(
-                    crumb_coord_tuple=crumb_tuple,
-                    agent_full_sequences=full_sequences,
-                    agent_middle_sequences=middle_sequences,
-                    world_state=w_t0,
-                    agent_type_being_simulated=agent_type,
-                    chosen_plant_spots_for_sequences=current_chosen_plant_spots
-                )
-                if agent_id == 'A':
-                    raw_likelihoods_A[crumb_tuple] = likelihood_value
-                else:
-                    raw_likelihoods_B[crumb_tuple] = likelihood_value
-        return raw_likelihoods_A, raw_likelihoods_B
+        # Save results to file if requested
+        if param_log_dir and result.prediction_data_for_json:
+            self._save_results_to_json(
+                result.prediction_data_for_json, param_log_dir, trial_name, 
+                agent_type_being_simulated, source_data_type, mismatched_run
+            )
 
-
-    def smooth_likelihoods(self, raw_likelihoods_A: dict, raw_likelihoods_B: dict, agent_type: str, w_t0: World, params: SimulationParams) -> tuple[dict, dict]:
-        if agent_type == 'sophisticated':
-            detective_sigma = params.soph_detective_sigma
-            if detective_sigma > 0:
-                if raw_likelihoods_A and raw_likelihoods_B:
-                    final_A = smooth_likelihood_grid(raw_likelihoods_A, w_t0, detective_sigma)
-                    final_B = smooth_likelihood_grid(raw_likelihoods_B, w_t0, detective_sigma)
-                    return final_A, final_B
-        return raw_likelihoods_A, raw_likelihoods_B
-
-
-    def compute_predictions(self, final_likelihoods_A: dict, final_likelihoods_B: dict, possible_crumb_coords: list, trial_name: str, agent_type: str, source_data_type: str, mismatched_run: bool) -> tuple[dict, list]:
-        predictions = {}
-        crumb_data_for_json = []
-        for crumb_tuple in possible_crumb_coords:
-            likelihood_A = final_likelihoods_A.get(crumb_tuple, 0.0)
-            likelihood_B = final_likelihoods_B.get(crumb_tuple, 0.0)
-            slider_prediction = normalized_slider_prediction(likelihood_A, likelihood_B)
-            predictions[crumb_tuple] = slider_prediction
+        return result.predictions, result.model_output_A, result.model_output_B
+    
+    def _create_config_from_params(self) -> SimulationConfig:
+        """Convert legacy SimulationParams to new SimulationConfig"""
+        if self.params.evidence == 'visual':
+            config = SimulationConfig.create_visual_config(
+                trial_name="temp",
+                cost_weight=self.params.w,
+                naive_temp=self.params.n_temp,
+                sophisticated_temp=self.params.s_temp,
+                max_steps=self.params.max_steps
+            )
+            # Visual-specific parameters
+            config.evidence.sophisticated_detective_sigma = self.params.soph_detective_sigma
+            config.evidence.visual_smoothing_sigma = getattr(self.params, 'soph_suspect_sigma', 0.0)
             
-            data_entry = {
-                "trial": trial_name, "evidence": "visual", "agent_type": agent_type,
-                "crumb_location_world_coords": list(crumb_tuple),
-                "slider_prediction": float(slider_prediction),
-                "evidence_likelihood_A": float(likelihood_A),
-                "evidence_likelihood_B": float(likelihood_B)
-            }
-            if source_data_type is not None:
-                data_entry['source_data_type'] = source_data_type
-            if mismatched_run is not None:
-                data_entry['mismatched_run'] = mismatched_run
-            crumb_data_for_json.append(data_entry)
-        return predictions, crumb_data_for_json
+        elif self.params.evidence == 'audio':
+            config = SimulationConfig.create_audio_config(
+                trial_name="temp",
+                cost_weight=self.params.w,
+                naive_temp=self.params.n_temp,
+                sophisticated_temp=self.params.s_temp,
+                max_steps=self.params.max_steps,
+                audio_similarity_sigma=self.params.audio_segment_similarity_sigma
+            )
+            # Audio-specific parameters
+            config.evidence.audio_gt_step_size = getattr(self.params, 'audio_gt_step_size', 2)
+            
+        else:
+            raise ValueError(f"Unsupported evidence type: {self.params.evidence}")
+        
+        # Transfer sophisticated agent models if available  
+        if hasattr(self.params, 'naive_A_visual_likelihoods_map'):
+            config.evidence.naive_A_visual_likelihoods_map = self.params.naive_A_visual_likelihoods_map
+        if hasattr(self.params, 'naive_B_visual_likelihoods_map'):
+            config.evidence.naive_B_visual_likelihoods_map = self.params.naive_B_visual_likelihoods_map
+        if hasattr(self.params, 'naive_A_to_fridge_steps_model'):
+            config.evidence.naive_A_to_fridge_steps_model = self.params.naive_A_to_fridge_steps_model
+        if hasattr(self.params, 'naive_A_from_fridge_steps_model'):
+            config.evidence.naive_A_from_fridge_steps_model = self.params.naive_A_from_fridge_steps_model
+        if hasattr(self.params, 'naive_B_to_fridge_steps_model'):
+            config.evidence.naive_B_to_fridge_steps_model = self.params.naive_B_to_fridge_steps_model
+        if hasattr(self.params, 'naive_B_from_fridge_steps_model'):
+            config.evidence.naive_B_from_fridge_steps_model = self.params.naive_B_from_fridge_steps_model
+        
+        return config
 
-
-    def save_to_json(self, crumb_data_for_json: list, param_log_dir: str, trial_name: str, agent_type: str):
-        safe_agent_type_tag = agent_type.replace(" ", "_").replace("/", "_")
-        json_filename = os.path.join(param_log_dir, f'detective_preds_{trial_name}_{safe_agent_type_tag}.json')
-        with open(json_filename, 'w') as f:
-            json.dump(crumb_data_for_json, f, indent=4)
-
-
-    def simulate_detective(self, w_t0: World,
-                           trial_name: str, sampled_data: dict, agent_type: str, params: SimulationParams, param_log_dir: str,
-                           source_data_type: str=None, mismatched_run: bool=None) -> tuple[dict, dict, dict]:
-        possible_crumb_coords = w_t0.get_valid_kitchen_crumb_coords_world()
-
-        raw_likelihoods_A, raw_likelihoods_B = self.compute_likelihoods(w_t0, sampled_data, agent_type, params, possible_crumb_coords)
-
-        final_likelihoods_A, final_likelihoods_B = self.smooth_likelihoods(raw_likelihoods_A, raw_likelihoods_B, agent_type, w_t0, params)
-
-        predictions, crumb_data_for_json = self.compute_predictions(final_likelihoods_A, final_likelihoods_B, possible_crumb_coords, 
-                                                                    trial_name, agent_type, source_data_type, mismatched_run)
-
-        self.save_to_json(crumb_data_for_json, param_log_dir, trial_name, agent_type)
-
-        return predictions, final_likelihoods_A, final_likelihoods_B
+    def _save_results_to_json(self, prediction_data: list, param_log_dir: str, trial_name: str, 
+                            agent_type_simulated: str, source_data_type: str = None, 
+                            mismatched_run: bool = None):
+        """Save prediction results to JSON file"""
+        # Determine filename based on simulation type
+        condition_name = agent_type_simulated
+        if mismatched_run and source_data_type:
+            condition_name = f"{agent_type_simulated}_as_{source_data_type}"
+        
+        filename = f"{trial_name}_{condition_name}_{self.params.evidence}_predictions.json"
+        filepath = os.path.join(param_log_dir, filename)
+        
+        try:
+            serializable_data = ensure_serializable(prediction_data)
+            with open(filepath, 'w') as f:
+                json.dump(serializable_data, f, indent=4)
+            self.logger.info(f"Saved predictions to {filepath}")
+        except Exception as e:
+            self.logger.error(f"Failed to save predictions to {filepath}: {e}")

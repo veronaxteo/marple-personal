@@ -6,8 +6,8 @@ import numpy as np
 import json
 from dataclasses import asdict
 
-from test_utils import create_param_dir, get_json_files 
-from test_simulation import RSMSimulator, EmpiricalSimulator, UniformSimulator
+from utils import create_param_dir, get_json_files 
+from simulation import RSMSimulator, EmpiricalSimulator, UniformSimulator
 from params import SimulationParams
 
 

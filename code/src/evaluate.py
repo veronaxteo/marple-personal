@@ -18,7 +18,10 @@ def extract_params_from_path(log_dir_path: str) -> dict:
         'w': None, 'n_temp': None, 's_temp': None, 
         'max_steps': None, 'soph_suspect_sigma': None, 
         'soph_detective_sigma': None, 'noisy_planting_sigma': None,
-        'param_dir_name': None
+        'door_close_prob': None, 'audio_gt_step_size': None,
+        'audio_segment_similarity_sigma': None, 'sample_paths_suspect': None,
+        'sample_paths_detective': None, 'seed': None, 'command': None,
+        'mismatched': None, 'param_dir_name': None
     }
     
     dir_name = os.path.basename(log_dir_path)
@@ -48,15 +51,29 @@ def extract_params_from_path(log_dir_path: str) -> dict:
         try:
             with open(metadata_path, 'r') as f:
                 metadata = json.load(f)
-            # Override or add params from metadata if they exist, prioritizing metadata
-            params['w'] = metadata.get('w', params['w'])
-            params['n_temp'] = metadata.get('n_temp', params['n_temp'])
-            params['s_temp'] = metadata.get('s_temp', params['s_temp'])
-            params['max_steps'] = metadata.get('max_steps', params['max_steps'])
-            params['soph_suspect_sigma'] = metadata.get('soph_suspect_sigma', params['soph_suspect_sigma'])
-            params['soph_detective_sigma'] = metadata.get('soph_detective_sigma', params['soph_detective_sigma'])
-            params['noisy_planting_sigma'] = metadata.get('noisy_planting_sigma', params['noisy_planting_sigma'])
-            # evidence type is handled separately by get_evidence_type_from_metadata
+            
+            # Extract parameters from metadata, prioritizing metadata over path parsing
+            metadata_params = metadata.get('parameters', {})
+            if not metadata_params:
+                # Try direct metadata access for backwards compatibility
+                metadata_params = metadata
+            
+            params['w'] = metadata_params.get('w', params['w'])
+            params['n_temp'] = metadata_params.get('n_temp', params['n_temp'])
+            params['s_temp'] = metadata_params.get('s_temp', params['s_temp'])
+            params['max_steps'] = metadata_params.get('max_steps', params['max_steps'])
+            params['soph_suspect_sigma'] = metadata_params.get('soph_suspect_sigma', params['soph_suspect_sigma'])
+            params['soph_detective_sigma'] = metadata_params.get('soph_detective_sigma', params['soph_detective_sigma'])
+            params['noisy_planting_sigma'] = metadata_params.get('noisy_planting_sigma', params['noisy_planting_sigma'])
+            params['door_close_prob'] = metadata_params.get('door_close_prob', params['door_close_prob'])
+            params['audio_gt_step_size'] = metadata_params.get('audio_gt_step_size', params['audio_gt_step_size'])
+            params['audio_segment_similarity_sigma'] = metadata_params.get('audio_segment_similarity_sigma', params['audio_segment_similarity_sigma'])
+            params['sample_paths_suspect'] = metadata_params.get('sample_paths_suspect', params['sample_paths_suspect'])
+            params['sample_paths_detective'] = metadata_params.get('sample_paths_detective', params['sample_paths_detective'])
+            params['seed'] = metadata_params.get('seed', params['seed'])
+            params['command'] = metadata_params.get('command', params['command'])
+            params['mismatched'] = metadata_params.get('mismatched', params['mismatched'])
+            
         except Exception as e:
             logger.warning(f"Could not parse metadata.json in {log_dir_path} for detailed params: {e}")
             
@@ -70,12 +87,15 @@ def get_evidence_type_from_metadata(base_dir: str, trial_name: str) -> str:
     if not os.path.exists(metadata_path):
          metadata_path = os.path.join(os.path.dirname(os.path.dirname(base_dir)), 'metadata.json')
 
-
     if os.path.exists(metadata_path):
-        with open(metadata_path, 'r') as f:
-            metadata = json.load(f)
-        return metadata.get('evidence', 'visual').lower()
-
+        try:
+            with open(metadata_path, 'r') as f:
+                metadata = json.load(f)
+            return metadata.get('evidence', 'visual').lower()
+        except Exception as e:
+            logger.warning(f"Could not parse metadata.json for evidence type: {e}")
+    
+    return 'visual'  # default fallback
 
 def calculate_avg_path_lengths(csv_filepath: str) -> list:
     """
@@ -184,11 +204,30 @@ def analyze_gt_audio_lengths_vs_predictions(json_filepath: str, num_bins: int = 
 
     processed_entries = []
     for entry in predictions_data:
-        gt_seq = entry.get('ground_truth_audio_sequence')
-        slider = entry.get('slider')
-        l_a = entry.get('L_A_given_gt')
-        l_b = entry.get('L_B_given_gt')
-        agent_type_sim = entry.get('agent_type_simulated')
+        # Handle both old and new JSON formats
+        if 'ground_truth_audio_sequence' in entry:
+            # Old format
+            gt_seq = entry.get('ground_truth_audio_sequence')
+            slider = entry.get('slider')
+            l_a = entry.get('L_A_given_gt')
+            l_b = entry.get('L_B_given_gt')
+            agent_type_sim = entry.get('agent_type_simulated')
+        else:
+            # New format
+            gt_seq = entry.get('gt_sequence')
+            slider = entry.get('prediction')
+            l_a = entry.get('likelihood_A')
+            l_b = entry.get('likelihood_B')
+            # Extract agent type from filename since it's not in the JSON
+            base_filename = os.path.basename(json_filepath)
+            if '_naive_' in base_filename:
+                agent_type_sim = 'naive'
+            elif '_sophisticated_' in base_filename:
+                agent_type_sim = 'sophisticated'
+            elif '_uniform_' in base_filename:
+                agent_type_sim = 'uniform'
+            else:
+                agent_type_sim = 'unknown'
         
         if gt_seq and isinstance(gt_seq, list) and len(gt_seq) == 5 and \
            isinstance(gt_seq[0], int) and isinstance(gt_seq[4], int) and \
@@ -213,8 +252,9 @@ def analyze_gt_audio_lengths_vs_predictions(json_filepath: str, num_bins: int = 
     experiment_params = extract_params_from_path(param_log_dir)
 
     base_filename = os.path.basename(json_filepath)
-    # Expected format: {trial_name}_{model_condition_name}_audio_predictions.json
-    filename_parts = base_filename.replace("_audio_predictions.json", "").split("_")
+    # New format: {trial_name}_{agent_type}_{evidence}_predictions.json
+    # Extract trial name from new format
+    filename_parts = base_filename.replace("_predictions.json", "").split("_")
     trial_name_from_file = filename_parts[0] if len(filename_parts) > 0 else "unknown_trial"
 
     print("\nOverall Ground Truth Audio Length vs. Predictions Summary:")
@@ -306,14 +346,11 @@ def main_evaluate(dir_to_search: str):
 
     logger.info(f"Starting evaluation in directory: {dir_to_search}")
 
+    # Updated to include uniform agent type from UniformSimulator
     csv_search_pattern_sampled_paths = os.path.join(dir_to_search, '**', '*_sampled_paths_*.csv')
-    # csv_search_pattern_specific = os.path.join(dir_to_search, '**', '*_sampled_paths_sophisticated.csv') # Covered by above
-    # csv_search_pattern_general_paths = os.path.join(dir_to_search, '**', '*_paths.csv') # Not used by current functions
 
     all_csv_files = set()
     all_csv_files.update(glob.glob(csv_search_pattern_sampled_paths, recursive=True))
-    # all_csv_files.update(glob.glob(csv_search_pattern_specific, recursive=True))
-    # all_csv_files.update(glob.glob(csv_search_pattern_general_paths, recursive=True))
     
     all_path_length_results = []
     processed_csv_for_avg_length = set()
@@ -331,21 +368,29 @@ def main_evaluate(dir_to_search: str):
                 logger.error(f"Error processing {csv_file} for path lengths: {e}")
     
     all_prediction_analysis_results = []
-    json_search_pattern = os.path.join(dir_to_search, '**', '*_audio_predictions.json') # Currently only for audio predictions
-    json_files = glob.glob(json_search_pattern, recursive=True)
+    # Updated search pattern for new naming convention: {trial_name}_{agent_type}_{evidence}_predictions.json
+    # Also search for uniform predictions that might have different naming
+    json_search_pattern_audio = os.path.join(dir_to_search, '**', '*_audio_predictions.json')
+    json_search_pattern_visual = os.path.join(dir_to_search, '**', '*_visual_predictions.json')
+    json_search_pattern_uniform = os.path.join(dir_to_search, '**', '*_uniform_predictions.json')
+    
+    json_files = glob.glob(json_search_pattern_audio, recursive=True)
+    json_files.extend(glob.glob(json_search_pattern_visual, recursive=True))
+    json_files.extend(glob.glob(json_search_pattern_uniform, recursive=True))
 
     if not json_files:
-        logger.info("No JSON files matching '*_audio_predictions.json' found for detective prediction analysis.")
+        logger.info("No JSON files matching '*_{evidence}_predictions.json' or '*_uniform_predictions.json' found for detective prediction analysis.")
 
     for json_file in json_files:
-        logger.info(f"--- Analyzing GT audio lengths vs. predictions for: {json_file} ---")
-        try:
-            prediction_analysis_data = analyze_gt_audio_lengths_vs_predictions(json_file)
-            if prediction_analysis_data:
-                all_prediction_analysis_results.extend(prediction_analysis_data)
-        except Exception as e:
-            logger.error(f"Error processing {json_file} for GT length vs. predictions: {e}")
-
+        # Only analyze audio predictions for now, as the function is specific to audio
+        if "_audio_predictions.json" in json_file:
+            logger.info(f"--- Analyzing GT audio lengths vs. predictions for: {json_file} ---")
+            try:
+                prediction_analysis_data = analyze_gt_audio_lengths_vs_predictions(json_file)
+                if prediction_analysis_data:
+                    all_prediction_analysis_results.extend(prediction_analysis_data)
+            except Exception as e:
+                logger.error(f"Error processing {json_file} for GT length vs. predictions: {e}")
 
     if all_path_length_results:
         path_lengths_df = pd.DataFrame(all_path_length_results)
