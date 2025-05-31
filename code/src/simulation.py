@@ -1,10 +1,12 @@
 import logging
 import pandas as pd
 import ast
-from utils import save_sampled_paths_to_csv, smooth_likelihood_grid
-from world import World, load_simple_path_sequences
-from agents import Suspect, Detective
-from params import SimulationParams
+from src.utils.math_utils import smooth_likelihood_grid, smooth_likelihood_grid_connectivity_aware
+from src.utils.io_utils import save_sampled_paths_to_csv
+from src.utils.world_utils import PathSequenceCache
+from src.world import World, load_simple_path_sequences
+from src.agents import Suspect, Detective
+from src.params import SimulationParams
 import traceback
 
 
@@ -18,6 +20,7 @@ class BaseSimulator:
         self.params = params
         self.trials_to_run = trials_to_run
         self.logger = logging.getLogger(self.__class__.__name__)
+        self.path_cache = PathSequenceCache(log_dir_base)
 
     def run_trial(self, trial_file: str, trial_name: str, world: World) -> dict:
         """Run simulation for a single trial. Must be implemented by subclasses"""
@@ -57,19 +60,13 @@ class RSMSimulator(BaseSimulator):
         self.logger.info(f"Generating {num_suspect_paths} suspect paths and {num_detective_paths} detective paths")
 
         # Load path sequences for both agents
-        paths_A, paths_B = load_simple_path_sequences(
-            self.log_dir_base, trial_name, world, self.params, self.params.max_steps
-        )
-
-        if not paths_A or not paths_B:
-            self.logger.error(f"Failed to load path sequences for {trial_name}")
-            return None
+        paths_A, paths_B = load_simple_path_sequences(self.log_dir_base, trial_name, world, self.params, self.params.max_steps)
 
         # Initialize agents
         suspect = Suspect('suspect_rsm', self.params.evidence, self.params)
         detective = Detective('detective_rsm', self.params.evidence, self.params)
 
-        # Level 1: Naive agent simulation
+        # Level 1: Naive agents
         self.logger.info("--- Simulating Level 1 (Naive Agent) ---")
         
         naive_suspect_data = suspect.simulate_suspect(world, paths_A, paths_B, 'naive', num_suspect_paths)
@@ -81,8 +78,8 @@ class RSMSimulator(BaseSimulator):
 
         # Process naive models for sophisticated suspects
         self._process_naive_models_for_sophisticated(naive_A_model, naive_B_model, world)
-
-        # Level 2: Sophisticated agent simulation
+        
+        # Level 2: Sophisticated agents
         self.logger.info("--- Simulating Level 2 (Sophisticated Agent) ---")
         
         soph_suspect_data = suspect.simulate_suspect(world, paths_A, paths_B, 'sophisticated', num_suspect_paths)
@@ -111,8 +108,14 @@ class RSMSimulator(BaseSimulator):
             
             if self.params.soph_suspect_sigma > 0:
                 self.logger.info(f"Smoothing visual likelihood maps (sigma={self.params.soph_suspect_sigma})")
-                smoothed_A_map = smooth_likelihood_grid(naive_A_model, world, self.params.soph_suspect_sigma)
-                smoothed_B_map = smooth_likelihood_grid(naive_B_model, world, self.params.soph_suspect_sigma)
+                # 2D grid-based smoothing without furniture awareness
+                # smoothed_A_map = smooth_likelihood_grid(naive_A_model, world, self.params.soph_suspect_sigma)
+                # smoothed_B_map = smooth_likelihood_grid(naive_B_model, world, self.params.soph_suspect_sigma)
+                
+                # Connectivity-aware smoothing
+                sigma_steps = max(1, int(self.params.soph_suspect_sigma))  # Convert sigma to discrete steps
+                smoothed_A_map = smooth_likelihood_grid_connectivity_aware(naive_A_model, world, sigma_steps)
+                smoothed_B_map = smooth_likelihood_grid_connectivity_aware(naive_B_model, world, sigma_steps)
             
             self.params.naive_A_visual_likelihoods_map = smoothed_A_map
             self.params.naive_B_visual_likelihoods_map = smoothed_B_map
@@ -248,9 +251,7 @@ class UniformSimulator(BaseSimulator):
         detective = Detective('detective_uniform', 'visual', self.params)
 
         # Load path sequences
-        paths_A, paths_B = load_simple_path_sequences(
-            self.log_dir_base, trial_name, world, self.params, self.params.max_steps
-        )
+        paths_A, paths_B = load_simple_path_sequences(self.log_dir_base, trial_name, world, self.params, self.params.max_steps)
 
         if not paths_A or not paths_B:
             self.logger.error(f"Path sequences not found for {trial_name}")

@@ -2,11 +2,11 @@ import json
 import logging
 import os
 
-from world import World
-from params import SimulationParams
-from utils import ensure_serializable
-from evidence_processors import create_evidence_processor
-from config import SimulationConfig, PathSamplingTask, DetectiveTaskConfig
+from src.world import World
+from src.params import SimulationParams
+from src.utils.io_utils import ensure_serializable
+from src.utils.evidence_utils import create_evidence_processor
+from src.config import SimulationConfig, PathSamplingTask, DetectiveTaskConfig
 
 
 class Agent:

@@ -2,20 +2,13 @@ import json
 import logging
 import os
 import pickle
-import numpy as np
-from igraph import Graph
 
-from utils import normalized_slider_prediction
 from params import SimulationParams
-from path_sampler import PathSampler
-from world_components import WorldGraph, CoordinateMapper, WorldGeometry, SubgoalPlanner
+from paths import PathSampler
+from utils.world_utils import WorldGraph, CoordinateMapper, WorldGeometry, SubgoalPlanner, compute_agent_path_sequences
 
 
 class World:
-    """
-    Refactored World class that delegates to focused components.
-    Acts as a coordinator for world management operations.
-    """
     
     def __init__(self, info):
         self.info = info
@@ -99,11 +92,9 @@ class World:
 
     def get_valid_kitchen_crumb_coords_world(self):
         """Get list of valid world coordinates for crumbs in kitchen"""
-        return self.geometry.get_valid_kitchen_crumb_coords(
-            self.kitchen_info, self.world_graph.node_to_vid, self.world_graph.igraph
-        )
+        return self.geometry.get_valid_kitchen_crumb_coords(self.kitchen_info, self.world_graph.node_to_vid, self.world_graph.igraph)
 
-    # Graph operations delegation
+    # Graph operations
     def get_closest_door_to_agent(self, agent_id):
         """Find closest door node to agent start position"""
         agent_start_pos = self.start_coords.get(agent_id)
@@ -112,49 +103,27 @@ class World:
             return None
         return self.world_graph.find_closest_door_to_agent(agent_start_pos)
 
-    # Subgoal and path delegation
+    # Subgoal and paths
     def get_subgoals(self, agent_id):
         """Get subgoal sequence for an agent"""
         return self.subgoal_planner.get_subgoals(agent_id, self.start_coords, self.mission)
 
     def get_subgoal_simple_path_sequences(self, agent_id: str, params: SimulationParams, 
                                         evidence_type: str, max_steps_middle: int = 0):
-        """Get path segments for given evidence type"""
-        try:
-            subgoals = self.get_subgoals(agent_id)
-        except ValueError as e:
-            self.logger.error(f"Failed to get subgoals for agent {agent_id}: {e}")
-            return [], [], [], []
-
-        if len(subgoals) < 4:
-            self.logger.error(f"Insufficient subgoals for agent {agent_id} (expected 4, got {len(subgoals)})")
-            return [], [], [], []
-
-        # Get path segments based on evidence type
-        if evidence_type == 'visual':
-            max_steps = max_steps_middle if max_steps_middle > 0 else params.max_steps
-            segments = self.subgoal_planner.get_path_segments_visual(agent_id, subgoals, max_steps)
-        elif evidence_type == 'audio':
-            segments = self.subgoal_planner.get_path_segments_audio(agent_id, subgoals, params.max_steps)
-        else:
-            self.logger.error(f"Unknown evidence type '{evidence_type}'")
-            return [], [], [], []
-
-        p1, p2, p3, p_fs = segments
+        """Get path segments for given evidence type - delegates to utility function"""
+        from utils.world_utils import compute_agent_path_sequences
         
-        # Log path counts
-        if evidence_type == 'visual':
-            self.logger.info(f"Agent {agent_id} VISUAL: P1={len(p1)}, P2={len(p2)}, P3={len(p3)}")
-        else:  # audio
-            self.logger.info(f"Agent {agent_id} AUDIO: P1={len(p1)}, P_FS={len(p_fs)}")
-
-        # Validate critical paths
-        if not p1:
-            self.logger.warning(f"Agent {agent_id} ({evidence_type}): Empty P1 (Start->Fridge) paths")
-        if evidence_type == 'audio' and not p_fs:
-            self.logger.warning(f"Agent {agent_id} ({evidence_type}): Empty P_FS (Fridge->Start) paths")
-            
-        return p1, p2, p3, p_fs
+        max_steps = max_steps_middle if max_steps_middle > 0 else params.max_steps
+        
+        return compute_agent_path_sequences(
+            agent_id=agent_id,
+            world_graph=self.world_graph,
+            geometry=self.geometry,
+            start_coords=self.start_coords,
+            mission=self.mission,
+            evidence_type=evidence_type,
+            max_steps=max_steps
+        )
 
 
 def load_simple_path_sequences(log_dir_base: str, trial_name: str, w_t0: World, 
@@ -177,13 +146,15 @@ def load_simple_path_sequences(log_dir_base: str, trial_name: str, w_t0: World,
         except Exception as e:
             logger.warning(f"Failed to load cache for {trial_name}: {e}")
                     
-    # Compute path sequences
+    # Compute subgoal simple path sequences using utility function
     logger.info(f"Computing simple path sequences for {trial_name} (max_steps={max_steps})")
     
-    paths_A = w_t0.get_subgoal_simple_path_sequences('A', params, params.evidence, max_steps)
-    paths_B = w_t0.get_subgoal_simple_path_sequences('B', params, params.evidence, max_steps)
+    paths_A = compute_agent_path_sequences('A', w_t0.world_graph, w_t0.geometry, 
+                                         w_t0.start_coords, w_t0.mission, params.evidence, max_steps)
+    paths_B = compute_agent_path_sequences('B', w_t0.world_graph, w_t0.geometry, 
+                                         w_t0.start_coords, w_t0.mission, params.evidence, max_steps)
     
-    # Cache the results
+    # Cache results
     os.makedirs(cache_dir, exist_ok=True)
     try:
         cache_data = {'A': paths_A, 'B': paths_B}
@@ -194,3 +165,4 @@ def load_simple_path_sequences(log_dir_base: str, trial_name: str, w_t0: World,
         logger.error(f"Failed to cache paths for {trial_name}: {e}")
 
     return paths_A, paths_B
+

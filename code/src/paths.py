@@ -1,11 +1,11 @@
 import numpy as np
 import logging
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 
-from utils import softmax_list_vals, normalized_slider_prediction
-from evidence import get_compressed_audio_from_path, single_segment_audio_likelihood
-from config import SimulationConfig, PathSamplingTask, SamplingConfig, EvidenceConfig
+from src.utils.math_utils import softmax_list_vals, normalized_slider_prediction
+from src.evidence import get_compressed_audio_from_path, single_segment_audio_likelihood
+from src.config import SimulationConfig, PathSamplingTask
 
 
 @dataclass
@@ -412,30 +412,52 @@ class PathSampler:
             self.logger.warning("Naive likelihood maps not available for sophisticated agent")
             return None, best_slider
 
-        # Find optimal spot based on agent strategy
+        # Find optimal spot based on agent strategy with improved tiebreaking
         other_agent_start = world.start_coords.get('B' if agent_id == 'A' else 'A')
-
+        
+        # Collect all optimal tiles instead of updating immediately
+        optimal_tiles = []
         for tile in valid_planting_spots:
             l_A = naive_A_map.get(tuple(tile), 0.0)
             l_B = naive_B_map.get(tuple(tile), 0.0)
             slider = normalized_slider_prediction(l_A, l_B)
 
             is_better = (agent_id == 'A' and slider > best_slider) or (agent_id == 'B' and slider < best_slider)
-            is_equal = slider == best_slider
             
-            if is_better or (is_equal and self._is_closer_to_other_agent(tile, optimal_plant_spot, other_agent_start)):
-                optimal_plant_spot = tile
+            if is_better:
+                # Found better slider value - reset collection
                 best_slider = slider
+                optimal_tiles = [tile]
+            elif slider == best_slider:
+                # Tied for best slider value
+                optimal_tiles.append(tile)
+        
+        # Apply distance tiebreaker among optimal tiles
+        if len(optimal_tiles) > 1 and other_agent_start is not None:
+            min_distance = float('inf')
+            closest_tiles = []
+            
+            for tile in optimal_tiles:
+                distance = np.linalg.norm(np.array(tile) - np.array(other_agent_start))
+                if distance < min_distance:
+                    min_distance = distance
+                    closest_tiles = [tile]
+                elif distance == min_distance:
+                    closest_tiles.append(tile)
+            
+            final_tiles = closest_tiles
+        else:
+            final_tiles = optimal_tiles
+        
+        # Random selection from final tied set
+        if len(final_tiles) > 1:
+            logging.info(f"Several 'closest optimal tiles' found: {final_tiles}")
+            breakpoint()
+            
+        if final_tiles:
+            optimal_plant_spot = final_tiles[np.random.randint(len(final_tiles))]
         
         return optimal_plant_spot, best_slider
-    
-    def _is_closer_to_other_agent(self, new_spot, current_spot, other_agent_start):
-        """Helper to determine if new spot is closer to other agent than current spot"""
-        if current_spot is None or other_agent_start is None:
-            return True
-        dist_new = np.linalg.norm(np.array(new_spot) - np.array(other_agent_start))
-        dist_current = np.linalg.norm(np.array(current_spot) - np.array(other_agent_start))
-        return dist_new < dist_current
     
     def _get_noisy_plant_spot(self, world, optimal_spot, sigma):
         """Get noisy plant spot for sophisticated agents"""

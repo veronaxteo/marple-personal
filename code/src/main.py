@@ -6,9 +6,10 @@ import numpy as np
 import json
 from dataclasses import asdict
 
-from utils import create_param_dir, get_json_files 
-from simulation import RSMSimulator, EmpiricalSimulator, UniformSimulator
-from params import SimulationParams
+from src.utils.io_utils import get_json_files, create_param_dir
+from src.simulation import RSMSimulator, EmpiricalSimulator, UniformSimulator
+from src.params import SimulationParams
+from src.plot import main as plot
 
 
 def parse_args():
@@ -143,3 +144,10 @@ if __name__ == '__main__':
     
     simulator.run()
     main_logger.info(f"Simulation completed for {args.command} model.")
+    
+    # Plotting
+    main_logger.info("Starting plot generation ...")
+    plot(param_log_dir)
+    
+    main_logger.info("All processing completed.")
+    

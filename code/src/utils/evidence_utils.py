@@ -1,13 +1,13 @@
-from abc import ABC, abstractmethod
-import numpy as np
+from abc import ABC
 import logging
 from typing import Dict, List, Tuple, Any, Optional
 from dataclasses import dataclass
 
-from utils import normalized_slider_prediction, smooth_likelihood_grid
-from evidence import VisualEvidence, generate_ground_truth_audio_sequences, single_segment_audio_likelihood
-from config import SimulationConfig, DetectiveTaskConfig
-from params import SimulationParams
+from .math_utils import normalized_slider_prediction, smooth_likelihood_grid, smooth_likelihood_grid_connectivity_aware
+from src.evidence import VisualEvidence, generate_ground_truth_audio_sequences, single_segment_audio_likelihood
+from src.config import SimulationConfig, DetectiveTaskConfig
+from src.params import SimulationParams
+from src.plot import plot_smoothing_comparison
 
 
 @dataclass
@@ -110,8 +110,17 @@ class VisualEvidenceProcessor(EvidenceProcessor):
             if detective_sigma > 0:
                 self.logger.info(f"Smoothing visual likelihood maps (sigma={detective_sigma})")
                 if raw_likelihood_map_A and raw_likelihood_map_B:
-                    final_likelihood_map_A = smooth_likelihood_grid(raw_likelihood_map_A, task.world, detective_sigma)
-                    final_likelihood_map_B = smooth_likelihood_grid(raw_likelihood_map_B, task.world, detective_sigma)
+                    # 2D grid-based smoothing without furniture awareness
+                    # final_likelihood_map_A = smooth_likelihood_grid(raw_likelihood_map_A, task.world, detective_sigma)
+                    # final_likelihood_map_B = smooth_likelihood_grid(raw_likelihood_map_B, task.world, detective_sigma)
+                    
+                    # Connectivity-aware smoothing
+                    sigma_steps = max(1, int(detective_sigma))  # Convert sigma to discrete steps
+                    final_likelihood_map_A = smooth_likelihood_grid_connectivity_aware(raw_likelihood_map_A, task.world, sigma_steps)
+                    final_likelihood_map_B = smooth_likelihood_grid_connectivity_aware(raw_likelihood_map_B, task.world, sigma_steps)
+                    
+                    # Generate smoothing comparison plots for debugging
+                    plot_smoothing_comparison(task.trial_name, task.param_log_dir, raw_likelihood_map_A, raw_likelihood_map_B, task.world, detective_sigma)
         
         # Calculate predictions using final (possibly smoothed) likelihoods
         prediction_data = []
@@ -151,8 +160,6 @@ class AudioEvidenceProcessor(EvidenceProcessor):
         
         self.logger.info(f"Computing AUDIO detective predictions for {task.agent_type_being_simulated} agents")
         
-        # Create temporary params object for legacy function
-        # TODO: Refactor generate_ground_truth_audio_sequences to use new config
         temp_params = SimulationParams(
             command='temp',
             trial=task.trial_name,

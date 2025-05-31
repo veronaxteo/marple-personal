@@ -1,9 +1,11 @@
 import logging
+import os
+import pickle
+import copy
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
-import copy
 from igraph import Graph
-from utils import get_shortest_paths, get_simple_paths, furniture_size
+from .math_utils import furniture_size
 
 
 @dataclass
@@ -343,3 +345,172 @@ class SubgoalPlanner:
         except Exception as e:
             self.logger.error(f"Error during audio path segment computation for agent {agent_id}: {e}")
             return [], [], [], []
+
+
+class PathSequenceCache:
+    """Handles caching and loading of simple path sequences for World objects"""
+    
+    def __init__(self, log_dir_base: str):
+        self.log_dir_base = log_dir_base
+        self.logger = logging.getLogger(self.__class__.__name__)
+    
+    # def load_simple_path_sequences(self, trial_name: str, world: 'World', params: 'SimulationParams'):
+    #     """Load or compute simple path sequences for a trial with caching."""
+    #     max_steps = params.max_steps
+    #     evidence_type_str = params.evidence
+
+    #     cache_dir = os.path.join(self.log_dir_base, 'simple_paths')
+    #     cache_filename = f'{trial_name}_simple_paths_{evidence_type_str}_{max_steps}.pkl'
+    #     pickle_path = os.path.join(cache_dir, cache_filename)
+        
+    #     # Try to load from cache
+    #     cached_result = self._load_from_cache(pickle_path, evidence_type_str, trial_name)
+    #     if cached_result is not None:
+    #         return cached_result
+        
+    #     # Compute new sequences
+    #     self.logger.info(f"Computing {evidence_type_str} simple path sequences for {trial_name} (A and B)... Filename: {pickle_path}")
+        
+    #     # paths_A_tuple = self._compute_agent_paths(world, 'A', params, evidence_type_str, max_steps)
+    #     # paths_B_tuple = self._compute_agent_paths(world, 'B', params, evidence_type_str, max_steps)
+    #     paths_A_tuple = compute_agent_path_sequences('A', world.world_graph, world.geometry, 
+    #                                      world.start_coords, world.mission, evidence_type_str, max_steps)
+    #     paths_B_tuple = compute_agent_path_sequences('B', world.world_graph, world.geometry, 
+    #                                      world.start_coords, world.mission, evidence_type_str, max_steps)
+        
+    #     # Cache results
+    #     self._save_to_cache(pickle_path, paths_A_tuple, paths_B_tuple, evidence_type_str, trial_name)
+    #     return paths_A_tuple, paths_B_tuple
+    
+    def _load_from_cache(self, pickle_path: str, evidence_type_str: str, trial_name: str):
+        """Try to load cached path sequences."""
+        if not os.path.exists(pickle_path):
+            return None
+            
+        try:
+            with open(pickle_path, 'rb') as f:
+                cached_data = pickle.load(f)
+                
+            if not (isinstance(cached_data, dict) and 'A' in cached_data and 'B' in cached_data):
+                self.logger.warning(f"Cached {evidence_type_str} path data is not in expected dict format for {trial_name}. Recomputing.")
+                return None
+                
+            paths_A_tuple = cached_data['A']
+            paths_B_tuple = cached_data['B']
+            
+            # Validate 4-tuple structure
+            if not (isinstance(paths_A_tuple, tuple) and len(paths_A_tuple) == 4 and
+                   isinstance(paths_B_tuple, tuple) and len(paths_B_tuple) == 4):
+                self.logger.warning(f"Cached {evidence_type_str} path tuples have incorrect structure for {trial_name}. Recomputing.")
+                return None
+                
+            self.logger.info(f"Loaded cached {evidence_type_str} simple path sequences for {trial_name} from {pickle_path}.")
+            
+            # Log path counts for debugging
+            if evidence_type_str == 'visual':
+                self.logger.info(f"  A: P1:{len(paths_A_tuple[0])}, P2:{len(paths_A_tuple[1])}, P3:{len(paths_A_tuple[2])}")
+                self.logger.info(f"  B: P1:{len(paths_B_tuple[0])}, P2:{len(paths_B_tuple[1])}, P3:{len(paths_B_tuple[2])}")
+            elif evidence_type_str == 'audio':
+                self.logger.info(f"  A: P1(S->F):{len(paths_A_tuple[0])}, P_FS(F->S):{len(paths_A_tuple[3])}")
+                self.logger.info(f"  B: P1(S->F):{len(paths_B_tuple[0])}, P_FS(F->S):{len(paths_B_tuple[3])}")
+                
+            return paths_A_tuple, paths_B_tuple
+            
+        except Exception as e:
+            self.logger.warning(f"Error loading cached {evidence_type_str} paths for {trial_name}: {e}. Recomputing.")
+            return None
+    
+    
+    def _save_to_cache(self, pickle_path: str, paths_A_tuple, paths_B_tuple, evidence_type_str: str, trial_name: str):
+        """Save computed path sequences to cache."""
+        try:
+            os.makedirs(os.path.dirname(pickle_path), exist_ok=True)
+            cached_data = {'A': paths_A_tuple, 'B': paths_B_tuple}
+            with open(pickle_path, 'wb') as f:
+                pickle.dump(cached_data, f)
+            self.logger.info(f"Cached {evidence_type_str} simple path sequences for {trial_name} to {pickle_path}")
+        except Exception as e:
+            self.logger.error(f"Failed to cache {evidence_type_str} paths for {trial_name}: {e}")
+
+
+def get_shortest_paths(igraph_instance, source_vid: int, target_vid: int, vid_to_node_map: dict):
+    """Finds all shortest paths between source and target in an igraph graph."""
+    logger = logging.getLogger(__name__)
+    try:
+        vid_paths = igraph_instance.get_all_shortest_paths(source_vid, to=target_vid, weights=None, mode='all')
+        coord_paths = []
+        for vid_path in vid_paths:
+            coord_path = [vid_to_node_map[vid] for vid in vid_path]
+            coord_paths.append(coord_path)
+        return coord_paths
+    except Exception as e:
+        logger.warning(f"No path found between VIDs {source_vid} and {target_vid} using igraph, or error: {e}")
+        return []
+
+
+def get_simple_paths(igraph_instance, source_vid: int, target_vid: int, cutoff: int, vid_to_node_map: dict):
+    """Finds all simple paths up to cutoff length using igraph."""
+    logger = logging.getLogger(__name__)
+    try:
+        vid_paths = igraph_instance.get_all_simple_paths(source_vid, to=target_vid, cutoff=cutoff, mode='all')
+        coord_paths = []
+        for vid_path in vid_paths:
+            coord_path = [vid_to_node_map[vid] for vid in vid_path]
+            coord_paths.append(coord_path)
+        return coord_paths
+    except Exception as e:
+        logger.warning(f"Error finding simple paths between vertex IDs {source_vid} and {target_vid} with cutoff {cutoff} using igraph: {e}")
+        return []
+
+
+def compute_agent_path_sequences(agent_id: str, world_graph: WorldGraph, geometry: WorldGeometry, 
+                               start_coords: Dict[str, Tuple[int, int]], mission: str, 
+                               evidence_type: str, max_steps: int) -> Tuple[List, List, List, List]:
+    """
+    Compute path sequences for an agent using world components directly.
+    
+    Args:
+        agent_id: Agent identifier ('A' or 'B')
+        world_graph: WorldGraph instance
+        geometry: WorldGeometry instance
+        start_coords: Dictionary mapping agent IDs to start coordinates
+        mission: Mission string
+        evidence_type: 'visual' or 'audio'
+        max_steps: Maximum steps for pathfinding
+        
+    Returns:
+        Tuple of (P1, P2, P3, P_FS) path lists
+    """
+    logger = logging.getLogger(__name__)
+    
+    # Create subgoal planner
+    subgoal_planner = SubgoalPlanner(world_graph, geometry)
+    
+    try:
+        subgoals = subgoal_planner.get_subgoals(agent_id, start_coords, mission)
+    except ValueError as e:
+        logger.error(f"Failed to get subgoals for agent {agent_id}: {e}")
+        return [], [], [], []
+
+    if len(subgoals) < 4:
+        logger.error(f"Insufficient subgoals for agent {agent_id} (expected 4, got {len(subgoals)})")
+        return [], [], [], []
+
+    # Get path segments based on evidence type
+    if evidence_type == 'visual':
+        segments = subgoal_planner.get_path_segments_visual(agent_id, subgoals, max_steps)
+    elif evidence_type == 'audio':
+        segments = subgoal_planner.get_path_segments_audio(agent_id, subgoals, max_steps)
+    else:
+        logger.error(f"Unknown evidence type '{evidence_type}'")
+        return [], [], [], []
+
+    p1, p2, p3, p_fs = segments
+    
+    # Log path counts
+    if evidence_type == 'visual':
+        logger.info(f"Agent {agent_id} VISUAL: P1={len(p1)}, P2={len(p2)}, P3={len(p3)}")
+    else:  # audio
+        logger.info(f"Agent {agent_id} AUDIO: P1={len(p1)}, P_FS={len(p_fs)}")
+
+    return p1, p2, p3, p_fs
