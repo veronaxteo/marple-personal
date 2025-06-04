@@ -11,6 +11,7 @@ from scipy.stats import norm
 from src.cfg import SimulationConfig
 
 
+# TODO: fix param warnings
 def get_audio_tokens_for_path(world_state: 'World', path_coords: List) -> List[str]:
     """
     Generate raw audio tokens for an agent traversing a path.
@@ -109,6 +110,7 @@ def single_segment_audio_likelihood(gt_steps: int, path_steps: int, sigma_factor
 def generate_ground_truth_audio_sequences(world: 'World', config: SimulationConfig) -> List[List]:
     """
     Generate ground truth compressed audio sequences for detective predictions.
+    Only generates sequences with step counts that are actually feasible by at least one agent.
     
     Args:
         world: World object containing environment and path information
@@ -130,13 +132,34 @@ def generate_ground_truth_audio_sequences(world: 'World', config: SimulationConf
     start_A_vid = node_to_vid[start_coords['A']]
     start_B_vid = node_to_vid[start_coords['B']]
     fridge_vid = node_to_vid[fridge_access_point]
+    
+    # Calculate shortest paths to fridge for both agents
+    # TODO: move?
+    def get_shortest_path_length(source_vid, target_vid):
+        """Get shortest path length between two vertices"""
+        path_matrix = igraph.shortest_paths(source=source_vid, target=target_vid)
+        return int(path_matrix[0][0]) if path_matrix and path_matrix[0] and path_matrix[0][0] != float('inf') else None
 
-    # Generate ground truth sequences using shortest paths with different step sizes
+    # Get minimum steps for each direction
+    steps_A_to_fridge = get_shortest_path_length(start_A_vid, fridge_vid)
+    steps_B_to_fridge = get_shortest_path_length(start_B_vid, fridge_vid)
+    steps_A_from_fridge = get_shortest_path_length(fridge_vid, start_A_vid)
+    steps_B_from_fridge = get_shortest_path_length(fridge_vid, start_B_vid)
+    
+    # Find minimum feasible steps (closest agent determines starting point)
+    min_steps_to_fridge = min(s for s in [steps_A_to_fridge, steps_B_to_fridge] if s is not None)
+    min_steps_from_fridge = min(s for s in [steps_A_from_fridge, steps_B_from_fridge] if s is not None)
+    
+    logger.info(f"Agent shortest paths: A->fridge={steps_A_to_fridge}, B->fridge={steps_B_to_fridge}")
+    logger.info(f"Agent shortest paths: fridge->A={steps_A_from_fridge}, fridge->B={steps_B_from_fridge}")
+    logger.info(f"Using minimum feasible steps: to_fridge>={min_steps_to_fridge}, from_fridge>={min_steps_from_fridge}")
+
+    # Generate ground truth sequences starting from minimum feasible steps
     step_size = config.evidence.audio_gt_step_size
     max_steps = config.sampling.max_steps
     
-    for steps_to in range(step_size, max_steps + 1, step_size):
-        for steps_from in range(step_size, max_steps + 1, step_size):
+    for steps_to in range(min_steps_to_fridge, max_steps + 1, step_size):
+        for steps_from in range(min_steps_from_fridge, max_steps + 1, step_size):
             ground_truth_seq = [steps_to, 'fridge_opened', 'snack_picked_up', 'fridge_closed', steps_from]
             ground_truths.append(ground_truth_seq)
     

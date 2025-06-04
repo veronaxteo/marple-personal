@@ -59,8 +59,29 @@ class PathSampler:
         
         sequences_p1, sequences_p2, sequences_p3, sequences_fridge_to_start = task.simple_path_sequences
         
+        # Check if sequences are available
+        if not sequences_p2:
+            self.logger.error(f"No fridge-to-door paths available for agent {task.agent_id}. "
+                             f"This usually indicates world connectivity issues or restrictive max_steps ({task.config.sampling.max_steps})")
+            # Return empty result
+            return SamplingResult([], [], [], [], [], [], [], []).__dict__
+        
+        if not sequences_p1:
+            self.logger.error(f"No start-to-fridge paths available for agent {task.agent_id}")
+            return SamplingResult([], [], [], [], [], [], [], []).__dict__
+            
+        if not sequences_p3:
+            self.logger.error(f"No door-to-start paths available for agent {task.agent_id}")
+            return SamplingResult([], [], [], [], [], [], [], []).__dict__
+        
         # Calculate utilities and probabilities for P2 (Fridge->Door)
         utilities, optimal_plant_spots = self._calculate_visual_utilities(task, sequences_p2)
+        
+        # Handle case where no utilities were calculated
+        if len(utilities) == 0:
+            self.logger.error(f"No valid utilities calculated for agent {task.agent_id}")
+            return SamplingResult([], [], [], [], [], [], [], []).__dict__
+        
         probabilities = utilities_to_probabilities(utilities, task)
         
         # Sample paths
@@ -162,8 +183,20 @@ class PathSampler:
     ) -> Tuple[np.ndarray, List]:
         """Calculate utilities for visual path segments (P2: Fridge->Door)"""
         
+        # Safety check for empty sequences
+        if not sequences_p2:
+            self.logger.error(f"No sequences found from fridge to door for agent {task.agent_id}. "
+                             f"Check world connectivity and max_steps parameter ({task.config.sampling.max_steps})")
+            return np.array([]), []
+        
         # Calculate length-based utilities
         middle_path_lengths = np.array([len(seq) for seq in sequences_p2])
+        
+        # Safety check for empty lengths array
+        if len(middle_path_lengths) == 0:
+            self.logger.error(f"No valid path lengths found for agent {task.agent_id}")
+            return np.array([]), []
+        
         min_len, max_len = np.min(middle_path_lengths), np.max(middle_path_lengths)
         rescaled_lengths = np.zeros_like(middle_path_lengths, dtype=float)
         if max_len > min_len:

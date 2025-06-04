@@ -12,7 +12,7 @@ import pandas as pd
 import ast
 import json
 import logging
-from typing import Dict, Tuple, List
+from typing import Dict
 from ..core.world import World
 from ..utils.math_utils import smooth_likelihood_grid, smooth_likelihood_grid_connectivity_aware
 
@@ -136,19 +136,19 @@ def plot_suspect_paths_heatmap(trial_name: str, param_log_dir: str, agent_type_t
     # Determine path column and title based on evidence type and segment type
     if path_segment_type == 'to_fridge':
         if evidence_type == 'audio':
-            path_column_name = 'to_fridge_sequence_world_coords'
+            path_column_name = 'to_fridge_sequence'
         elif evidence_type == 'visual':
-            path_column_name = 'full_sequence_world_coords'
+            path_column_name = 'full_sequence'
         plot_title_segment = "Path to Fridge Tile Counts"
     elif path_segment_type == 'return_from_fridge':
         if evidence_type == 'audio':
-            path_column_name = 'middle_sequence_world_coords'  # From fridge to door
+            path_column_name = 'middle_sequence'  # From fridge to door
             plot_title_segment = "Path from Fridge to Door Tile Counts"
         elif evidence_type == 'visual':
-            path_column_name = 'full_sequence_world_coords'  # Will slice from fridge
+            path_column_name = 'full_sequence'  # Will slice from fridge
             plot_title_segment = "Return Path Tile Counts (from Fridge)"
     else:
-        path_column_name = 'full_sequence_world_coords'
+        path_column_name = 'full_sequence'
         plot_title_segment = "Full Path Tile Counts"
 
     fridge_access_point = world.get_fridge_access_point()
@@ -205,11 +205,11 @@ def plot_suspect_paths_heatmap(trial_name: str, param_log_dir: str, agent_type_t
 
         plt.figure(figsize=(12, 8)) 
         
-        # Set color based on agent_id
-        cmap = 'Reds' if agent_id == 'A' else 'Blues'
+        cmap = 'Blues' if agent_id == 'A' else 'Greens'
         
-        # Create heatmap
-        sns.heatmap(heatmap_grid, cmap=cmap, cbar=True, linewidths=0)
+        # Create heatmap with grid lines and annotations
+        sns.heatmap(heatmap_grid, cmap=cmap, cbar=True, annot=True, fmt=".0f", 
+                   linewidths=0.5, linecolor='gray')
         
         # Add labels and title
         plt.title(f"{plot_title_segment} - Agent {agent_id}\n"
@@ -258,6 +258,11 @@ def create_summary_plots(param_log_dir: str, trial_name: str):
 def plot_detective_predictions_heatmap(trial_name: str, param_log_dir: str, detective_agent_type: str, evidence_type: str = 'visual'):
     """Plot detective predictions as a heatmap showing slider values (-50 to +50)"""
     logger = logging.getLogger(__name__)
+
+    if evidence_type == 'audio':
+        # For audio evidence, use the specialized sequence length heatmap
+        plot_detective_audio_predictions_heatmap(trial_name, param_log_dir, detective_agent_type)
+        return
     
     # Load prediction data
     predictions_file = os.path.join(param_log_dir, f"{trial_name}_{detective_agent_type}_{evidence_type}_predictions.json")
@@ -291,8 +296,8 @@ def plot_detective_predictions_heatmap(trial_name: str, param_log_dir: str, dete
         if "crumb_coord" in pred_entry:
             world_coord_tuple = tuple(pred_entry["crumb_coord"])
             slider_prediction = pred_entry.get("prediction")
-        elif "crumb_location_world_coords" in pred_entry:
-            world_coord_tuple = tuple(pred_entry["crumb_location_world_coords"])
+        elif "crumb_location" in pred_entry:
+            world_coord_tuple = tuple(pred_entry["crumb_location"])
             slider_prediction = pred_entry.get("slider_prediction", pred_entry.get("slider"))
         
         if world_coord_tuple and len(world_coord_tuple) == 2 and slider_prediction is not None:
@@ -321,6 +326,97 @@ def plot_detective_predictions_heatmap(trial_name: str, param_log_dir: str, dete
     plt.close()
 
 
+def plot_detective_audio_predictions_heatmap(trial_name: str, param_log_dir: str, detective_agent_type: str):
+    """Plot audio detective predictions as a heatmap based on sequence lengths to/from fridge"""
+    logger = logging.getLogger(__name__)
+    
+    # Load prediction data
+    predictions_file = os.path.join(param_log_dir, f"{trial_name}_{detective_agent_type}_audio_predictions.json")
+    if not os.path.exists(predictions_file):
+        logger.warning(f"Audio predictions file not found: {predictions_file}")
+        return
+    
+    with open(predictions_file, 'r') as f:
+        data = json.load(f)
+    
+    predictions_data = data.get('predictions', [])
+    if not predictions_data:
+        logger.warning(f"No predictions found in {predictions_file}")
+        return
+    
+    # Extract sequence lengths and predictions
+    to_fridge_lengths = []
+    from_fridge_lengths = []
+    prediction_values = []
+    
+    for pred_entry in predictions_data:
+        gt_sequence = pred_entry.get('gt_sequence', [])
+        prediction = pred_entry.get('prediction')
+        
+        if len(gt_sequence) >= 5 and prediction is not None:
+            # First element is distance to fridge, last element is distance from fridge
+            to_fridge = gt_sequence[0]
+            from_fridge = gt_sequence[-1]
+            
+            to_fridge_lengths.append(to_fridge)
+            from_fridge_lengths.append(from_fridge)
+            prediction_values.append(prediction)
+    
+    # Get unique sequence lengths for axes
+    unique_to_lengths = sorted(set(to_fridge_lengths))
+    unique_from_lengths = sorted(set(from_fridge_lengths))
+    
+    # Create heatmap grid
+    heatmap_grid = np.full((len(unique_from_lengths), len(unique_to_lengths)), np.nan)
+    
+    
+    # Map lengths to grid indices
+    to_length_map = {length: i for i, length in enumerate(unique_to_lengths)}
+    from_length_map = {length: i for i, length in enumerate(unique_from_lengths)}
+    
+    # Fill the grid
+    predictions_plotted = 0
+    for to_len, from_len, pred_val in zip(to_fridge_lengths, from_fridge_lengths, prediction_values):
+        if to_len in to_length_map and from_len in from_length_map:
+            row = from_length_map[from_len]
+            col = to_length_map[to_len]
+            heatmap_grid[row, col] = pred_val
+            predictions_plotted += 1
+    
+    logger.info(f"Plotted {predictions_plotted} audio predictions on sequence length grid")
+    
+    plt.figure(figsize=(12, 10))
+    
+    # Create heatmap with custom colormap
+    sns.heatmap(heatmap_grid, 
+                annot=True, 
+                fmt=".1f", 
+                cmap="coolwarm", 
+                center=0, 
+                cbar=True,
+                vmin=-50, 
+                vmax=50, 
+                linewidths=0.5, 
+                linecolor='gray',
+                xticklabels=unique_to_lengths,
+                yticklabels=unique_from_lengths[::-1])  # Reverse y-axis labels
+    
+    plt.title(f"Audio Detective Predictions ({detective_agent_type.capitalize()})\n"
+              f"Trial: {trial_name}, Slider: (-50: A, +50: B)")
+    plt.xlabel("Sequence Length TO Fridge")
+    plt.ylabel("Sequence Length FROM Fridge")
+    
+    # Add colorbar label
+    cbar = plt.gca().collections[0].colorbar
+    cbar.set_label('Detective Prediction (-50: A, +50: B)', rotation=270, labelpad=20)
+    
+    # Save plot
+    heatmap_filename = os.path.join(param_log_dir, f"detective_audio_preds_heatmap_{detective_agent_type}_{trial_name}.png")
+    plt.savefig(heatmap_filename, dpi=150, bbox_inches='tight')
+    logger.info(f"Saved audio detective predictions heatmap to {heatmap_filename}")
+    plt.close()
+
+
 def plot_suspect_crumb_planting_heatmap(trial_name: str, param_log_dir: str):
     """Plot sophisticated suspect crumb planting locations"""
     logger = logging.getLogger(__name__)
@@ -337,8 +433,9 @@ def plot_suspect_crumb_planting_heatmap(trial_name: str, param_log_dir: str):
     trial_file_name = f"{trial_name}_A1.json"
     world = World.initialize_world_start(trial_file_name)
     
-    kitchen_width = world.coordinate_mapper.kitchen_width
-    kitchen_height = world.coordinate_mapper.kitchen_height
+    # Use full apartment dimensions
+    plot_width = world.width
+    plot_height = world.height
     
     for agent_id in ['A', 'B']:
         agent_df = paths_df[paths_df['agent'] == agent_id]
@@ -348,11 +445,11 @@ def plot_suspect_crumb_planting_heatmap(trial_name: str, param_log_dir: str):
         plant_spots_counts = {}
         
         for spot_str in plant_spots_str_list:
-            if spot_str and spot_str != 'None' and spot_str != '[]':
+            if spot_str and spot_str != 'None' and spot_str != '[]' and spot_str != 'nan':
                 try:
                     spot_coord = ast.literal_eval(spot_str)
                     if isinstance(spot_coord, (list, tuple)) and len(spot_coord) == 2:
-                        spot_tuple = tuple(spot_coord)
+                        spot_tuple = tuple(map(int, spot_coord))
                         plant_spots_counts[spot_tuple] = plant_spots_counts.get(spot_tuple, 0) + 1
                 except (ValueError, SyntaxError):
                     continue
@@ -361,25 +458,23 @@ def plot_suspect_crumb_planting_heatmap(trial_name: str, param_log_dir: str):
             logger.warning(f"No valid plant spots found for Agent {agent_id}")
             continue
         
-        # Create heatmap grid
-        heatmap_grid = np.zeros((kitchen_height, kitchen_width))
+        # Create heatmap grid for full apartment
+        heatmap_grid = np.zeros((plot_height, plot_width))
         
         for world_coord_tuple, count in plant_spots_counts.items():
-            kitchen_coord = world.world_to_kitchen_coords(world_coord_tuple[0], world_coord_tuple[1])
-            if kitchen_coord:
-                kx, ky = kitchen_coord
-                if 0 <= ky < kitchen_height and 0 <= kx < kitchen_width:
-                    heatmap_grid[ky, kx] = count
+            world_x, world_y = world_coord_tuple
+            if 0 <= world_x < plot_width and 0 <= world_y < plot_height:
+                heatmap_grid[world_y, world_x] = count
         
-        plt.figure(figsize=(10, 4))
-        cmap = 'Reds' if agent_id == 'A' else 'Blues'
-        sns.heatmap(heatmap_grid, annot=True, fmt=".0f", cmap=cmap, cbar=True, linewidths=.5, linecolor='gray')
-        plt.title(f"Agent {agent_id}: Sophisticated Crumb Planting Locations\nTrial: {trial_name}")
-        plt.xlabel("Kitchen X")
-        plt.ylabel("Kitchen Y")
-        
-        plt.xticks(ticks=np.arange(0.5, kitchen_width, 1), labels=np.arange(1, kitchen_width + 1))
-        plt.yticks(ticks=np.arange(0.5, kitchen_height, 1), labels=np.arange(kitchen_height, 0, -1))
+        plt.figure(figsize=(12, 8))
+        # Use correct color scheme: A = Blues, B = Reds
+        cmap = 'Blues' if agent_id == 'A' else 'Reds'
+        sns.heatmap(heatmap_grid, annot=True, fmt=".0f", cmap=cmap, cbar=True, 
+                   linewidths=0.5, linecolor='gray')
+        plt.title(f"Agent {agent_id}: Sophisticated Crumb Planting Locations\n"
+                 f"Trial: {trial_name} (Full Apartment View)")
+        plt.xlabel("World X")
+        plt.ylabel("World Y")
         
         plot_filename = os.path.join(param_log_dir, f"crumb_planting_heatmap_agent_{agent_id}_{trial_name}.png")
         plt.savefig(plot_filename, dpi=150, bbox_inches='tight')

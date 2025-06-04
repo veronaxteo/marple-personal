@@ -174,10 +174,12 @@ def sample_paths_with_lengths(
     p_from_seq = None
     
     if selected_len_to in paths_by_len_to and paths_by_len_to[selected_len_to]:
-        p_to_seq = np.random.choice(paths_by_len_to[selected_len_to])
+        idx = np.random.choice(len(paths_by_len_to[selected_len_to]))
+        p_to_seq = paths_by_len_to[selected_len_to][idx]
     
     if selected_len_from in paths_by_len_from and paths_by_len_from[selected_len_from]:
-        p_from_seq = np.random.choice(paths_by_len_from[selected_len_from])
+        idx = np.random.choice(len(paths_by_len_from[selected_len_from]))
+        p_from_seq = paths_by_len_from[selected_len_from][idx]
     
     return p_to_seq, p_from_seq
 

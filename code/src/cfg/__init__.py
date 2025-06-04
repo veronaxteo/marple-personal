@@ -18,20 +18,12 @@ from .config import (
     AgentConfig,
     DetectiveTaskConfig,
     PathSamplingTask,
-    create_simulation_config
-)
-
-from .schema import (
-    SamplingSchema,
-    EvidenceSchema,
-    AgentSchema,
-    SimulationSchema,
+    create_simulation_config,
     validate_evidence_type,
     validate_trial_name
 )
 
 __all__ = [
-    # Modern configuration system
     'SimulationConfig',
     'EvidenceConfig', 
     'SamplingConfig',
@@ -40,11 +32,7 @@ __all__ = [
     'PathSamplingTask',
     'create_simulation_config',
     
-    # Validation schemas
-    'SamplingSchema',
-    'EvidenceSchema',
-    'AgentSchema', 
-    'SimulationSchema',
+    # Validation functions
     'validate_evidence_type',
     'validate_trial_name'
 ] 

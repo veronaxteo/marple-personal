@@ -36,7 +36,7 @@ class SubgoalPlanner:
         subgoals.append(start_pos)
         return subgoals
     
-    def get_path_segments_visual(self, agent_id: str, subgoals: List[Tuple[int, int]], max_steps_middle: int) -> Tuple[List, List, List, List]:
+    def get_path_segments_visual(self, agent_id: str, subgoals: List[Tuple[int, int]], max_steps: int) -> Tuple[List, List, List, List]:
         """Get path segments for visual evidence: P1 (shortest), P2 (simple), P3 (shortest), P_FS (empty)"""
         if len(subgoals) < 4:
             self.logger.error(f"Not enough subgoals for agent {agent_id} (expected 4, got {len(subgoals)})")
@@ -55,7 +55,7 @@ class SubgoalPlanner:
         
         try:
             sequences_p1 = get_shortest_paths(self.world_graph.igraph, sg_vid_s0, sg_vid_f, self.world_graph.vid_to_node)
-            sequences_p2 = get_simple_paths(self.world_graph.igraph, sg_vid_f, sg_vid_d, max_steps_middle, self.world_graph.vid_to_node)
+            sequences_p2 = get_simple_paths(self.world_graph.igraph, sg_vid_f, sg_vid_d, max_steps, self.world_graph.vid_to_node)
             sequences_p3 = get_shortest_paths(self.world_graph.igraph, sg_vid_d, sg_vid_s1, self.world_graph.vid_to_node)
             sequences_fridge_to_start = []
             

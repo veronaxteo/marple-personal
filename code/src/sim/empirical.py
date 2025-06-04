@@ -25,7 +25,7 @@ class EmpiricalSimulator(BaseSimulator):
         """Load and validate empirical path data"""
         try:
             df = pd.read_csv(paths_csv)
-            required_cols = ['trial', 'agent', 'agent_type', 'full_sequence_world_coords', 'middle_sequence_world_coords']
+            required_cols = ['trial', 'agent', 'agent_type', 'full_sequence', 'middle_sequence']
             missing_cols = [col for col in required_cols if col not in df.columns]
             
             if missing_cols:
@@ -33,8 +33,8 @@ class EmpiricalSimulator(BaseSimulator):
                 exit()
 
             # Parse coordinate columns
-            df['full_sequence_world_coords'] = df['full_sequence_world_coords'].apply(ast.literal_eval)
-            df['middle_sequence_world_coords'] = df['middle_sequence_world_coords'].apply(ast.literal_eval)
+            df['full_sequence'] = df['full_sequence'].apply(ast.literal_eval)
+            df['middle_sequence'] = df['middle_sequence'].apply(ast.literal_eval)
             
             self.logger.info(f"Loaded {len(df)} empirical paths")
             return df

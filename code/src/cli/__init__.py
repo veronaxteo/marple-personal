@@ -27,8 +27,8 @@ def setup_logging(log_dir, log_file=None):
     os.makedirs(log_dir, exist_ok=True)
     
     if log_file is None:
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        log_file = f"simulation_{timestamp}.log"
+        # timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        log_file = f"simulation.log"
     
     log_path = os.path.join(log_dir, log_file)
     
@@ -107,11 +107,10 @@ def create_parser():
     rsm_parser.add_argument('--evidence', choices=['visual', 'audio', 'multimodal'], 
                            default='visual', help='Evidence type')
     rsm_parser.add_argument('--trial', default='snack1', help='Trial name (or "all")')
-    rsm_parser.add_argument('--max-steps', type=int, default=25, help='Maximum steps')
-    rsm_parser.add_argument('--max-steps-middle', type=int, default=0, help='Max middle steps')
-    rsm_parser.add_argument('--weight', type=float, default=0.1, help='Cost weight')
-    rsm_parser.add_argument('--naive-temp', type=float, default=0.01, help='Naive temperature')
-    rsm_parser.add_argument('--soph-temp', type=float, default=0.01, help='Sophisticated temperature')
+    rsm_parser.add_argument('--max-steps', type=int, help='Maximum steps (overrides YAML)')
+    rsm_parser.add_argument('--weight', type=float, help='Cost weight (overrides YAML)')
+    rsm_parser.add_argument('--naive-temp', type=float, help='Naive temperature (overrides YAML)')
+    rsm_parser.add_argument('--soph-temp', type=float, help='Sophisticated temperature (overrides YAML)')
     rsm_parser.add_argument('--log-dir', default='../../results', help='Log directory')
     
     # Empirical analysis  
@@ -132,23 +131,34 @@ def create_parser():
 
 def create_config_from_args(args):
     """Create SimulationConfig object from CLI arguments"""
-    # Load base configuration from YAML defaults
-    defaults_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'cfg', 'default.yaml')
     
     if args.command == 'rsm':
-        # Load defaults from YAML
-        with open(defaults_path, 'r') as f:
+        # Load evidence-specific YAML config
+        cfg_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'cfg')
+        evidence_config_path = os.path.join(cfg_dir, f'{args.evidence}.yaml')
+        
+        # Fallback to default.yaml if evidence-specific config doesn't exist
+        if not os.path.exists(evidence_config_path):
+            evidence_config_path = os.path.join(cfg_dir, 'default.yaml')
+        
+        with open(evidence_config_path, 'r') as f:
             defaults = yaml.safe_load(f)
         
-        # Update defaults with CLI arguments
+        # Only override YAML values with CLI arguments that were explicitly provided
         defaults['default_trial'] = args.trial
-        defaults['sampling']['cost_weight'] = args.weight
-        defaults['sampling']['naive_temp'] = args.naive_temp
-        defaults['sampling']['sophisticated_temp'] = args.soph_temp
-        defaults['sampling']['max_steps'] = args.max_steps
         defaults['evidence']['evidence_type'] = args.evidence
         
-        # Add evidence-specific parameters
+        # Override sampling parameters only if provided on command line
+        if args.weight is not None:
+            defaults['sampling']['cost_weight'] = args.weight
+        if args.naive_temp is not None:
+            defaults['sampling']['naive_temp'] = args.naive_temp
+        if args.soph_temp is not None:
+            defaults['sampling']['sophisticated_temp'] = args.soph_temp
+        if args.max_steps is not None:
+            defaults['sampling']['max_steps'] = args.max_steps
+        
+        # Add evidence-specific parameters that aren't in YAML
         if args.evidence == 'audio':
             defaults['evidence']['audio_similarity_sigma'] = 0.1
         elif args.evidence == 'multimodal':
@@ -168,11 +178,10 @@ def create_config_from_args(args):
         
         # Set additional RSM-specific parameters
         config.log_dir_base = os.path.abspath(args.log_dir)
-        if hasattr(args, 'max_steps_middle') and args.max_steps_middle > 0:
-            config.sampling.max_steps_middle = args.max_steps_middle
-            
+        
     elif args.command == 'empirical':
         # Load defaults and create basic config for empirical analysis
+        defaults_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'cfg', 'default.yaml')
         with open(defaults_path, 'r') as f:
             defaults = yaml.safe_load(f)
         
@@ -198,6 +207,7 @@ def create_config_from_args(args):
         
     elif args.command == 'uniform':
         # Load defaults and create config for uniform baseline
+        defaults_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'cfg', 'default.yaml')
         with open(defaults_path, 'r') as f:
             defaults = yaml.safe_load(f)
         
@@ -233,12 +243,13 @@ def run_rsm_simulation(args):
     # Set random seed
     set_random_seed(config.seed)
     
+    # Use actual config values for parameter directory naming
     param_log_dir = create_param_dir(
         log_dir_base, args.trial, 
-        w=args.weight, 
-        naive_temp=args.naive_temp,
-        soph_temp=args.soph_temp,
-        max_steps=args.max_steps,
+        w=config.sampling.cost_weight, 
+        naive_temp=config.sampling.naive_temp,
+        soph_temp=config.sampling.sophisticated_temp,
+        max_steps=config.sampling.max_steps,
         model_type="rsm"
     )
     

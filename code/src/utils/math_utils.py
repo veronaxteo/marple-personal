@@ -61,8 +61,8 @@ def smooth_likelihood_grid(raw_likelihoods_map: dict, world, sigma: float) -> di
 
 def smooth_likelihood_grid_connectivity_aware(raw_likelihoods_map: dict, world, sigma_steps: int) -> dict:
     """
-    Apply connectivity-aware smoothing that respects the actual navigation graph structure.
-    Unlike regular Gaussian smoothing, this spreads likelihood only along valid paths.
+    Apply connectivity-aware smoothing that respects the navigation graph structure.
+    Spreads likelihood only along valid paths.
     
     Args:
         raw_likelihoods_map: Map from world coordinate tuples to likelihood values

@@ -118,10 +118,10 @@ class World:
         return self.subgoal_planner.get_subgoals(agent_id, self.start_coords, self.mission)
 
     def get_subgoal_simple_path_sequences(self, agent_id: str, config: SimulationConfig, 
-                                        evidence_type: str, max_steps_middle: int = 0):
+                                        evidence_type: str, max_steps: int = 0):
         """Get path segments for given evidence type - delegates to utility function"""
         
-        max_steps = max_steps_middle if max_steps_middle > 0 else config.sampling.max_steps
+        max_steps = max_steps if max_steps > 0 else config.sampling.max_steps
         
         return compute_agent_path_sequences(
             agent_id=agent_id,

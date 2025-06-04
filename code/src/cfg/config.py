@@ -8,10 +8,6 @@ import os
 import yaml
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any
-from .schema import (
-    SamplingSchema, EvidenceSchema, AgentSchema, SimulationSchema,
-    validate_evidence_type, validate_trial_name
-)
 
 
 @dataclass
@@ -20,7 +16,6 @@ class SamplingConfig:
     num_suspect_paths: int = 50
     num_detective_paths: int = 1000
     max_steps: int = 25
-    max_steps_middle: int = 25
     seed: int = 42
     
     naive_temp: float = 0.01
@@ -29,14 +24,19 @@ class SamplingConfig:
     cost_weight: float = 0.1
     
     def __post_init__(self):
-        # Validate using schema
-        SamplingSchema(
-            max_steps=self.max_steps,
-            max_steps_middle=self.max_steps_middle,
-            sample_paths_suspect=self.num_suspect_paths,
-            sample_paths_detective=self.num_detective_paths,
-            seed=self.seed
-        )
+        # Inline validation
+        if self.max_steps <= 0:
+            raise ValueError("max_steps must be positive")
+        if self.num_suspect_paths <= 0:
+            raise ValueError("num_suspect_paths must be positive")
+        if self.num_detective_paths <= 0:
+            raise ValueError("num_detective_paths must be positive")
+        if self.naive_temp <= 0:
+            raise ValueError("naive_temp must be positive")
+        if self.sophisticated_temp <= 0:
+            raise ValueError("sophisticated_temp must be positive")
+        if not (0.0 <= self.cost_weight <= 1.0):
+            raise ValueError("cost_weight must be between 0.0 and 1.0")
 
 
 @dataclass
@@ -66,11 +66,12 @@ class EvidenceConfig:
     def __post_init__(self):
         # Validate evidence type and parameters
         self.evidence_type = validate_evidence_type(self.evidence_type)
-        EvidenceSchema(
-            audio_similarity_sigma=self.audio_similarity_sigma,
-            audio_gt_step_size=self.audio_gt_step_size,
-            visual_weight=self.visual_weight
-        )
+        if self.audio_similarity_sigma < 0 or self.audio_similarity_sigma > 1:
+            raise ValueError("audio_similarity_sigma must be between 0 and 1")
+        if self.audio_gt_step_size < 1:
+            raise ValueError("audio_gt_step_size must be at least 1")
+        if self.visual_weight < 0 or self.visual_weight > 1:
+            raise ValueError("visual_weight must be between 0 and 1")
 
 
 @dataclass
@@ -105,7 +106,12 @@ class SimulationConfig:
         self.trial_name = validate_trial_name(self.trial_name)
         
         # Validate simulation parameters
-        SimulationSchema(log_dir=self.log_dir)
+        if not self.log_dir or not isinstance(self.log_dir, str):
+            raise ValueError("log_dir must be a non-empty string")
+        if not self.log_dir_base or not isinstance(self.log_dir_base, str):
+            raise ValueError("log_dir_base must be a non-empty string")
+        if not isinstance(self.save_intermediate_results, bool):
+            raise ValueError("save_intermediate_results must be a boolean")
     
     @classmethod
     def from_yaml(cls, yaml_path: str, **overrides) -> 'SimulationConfig':
@@ -134,6 +140,33 @@ class SimulationConfig:
             evidence=evidence_config,
             **defaults.get('simulation', {})
         )
+    
+    @classmethod
+    def from_evidence_type(cls, evidence_type: str, trial_name: str = None, **overrides) -> 'SimulationConfig':
+        """Factory method to load config for specific evidence type"""
+        config_dir = os.path.dirname(__file__)
+        
+        # Map evidence types to config files
+        config_files = {
+            'visual': os.path.join(config_dir, 'visual.yaml'),
+            'audio': os.path.join(config_dir, 'audio.yaml'),
+            'multimodal': os.path.join(config_dir, 'default.yaml')  # default for multimodal
+        }
+        
+        if evidence_type not in config_files:
+            raise ValueError(f"Unknown evidence type: {evidence_type}. Must be one of {list(config_files.keys())}")
+        
+        config_path = config_files[evidence_type]
+        
+        # Set evidence type and trial name if provided
+        if 'evidence' not in overrides:
+            overrides['evidence'] = {}
+        overrides['evidence']['evidence_type'] = evidence_type
+        
+        if trial_name:
+            overrides['default_trial'] = trial_name
+            
+        return cls.from_yaml(config_path, **overrides)
     
     @classmethod
     def create_visual_config(
@@ -253,3 +286,18 @@ def create_simulation_config(evidence_type: str = "visual", trial_name: str = "s
         return SimulationConfig.create_multimodal_config(trial_name=trial_name, **kwargs)
     else:
         raise ValueError(f"Unknown evidence type: {evidence_type}") 
+    
+
+def validate_evidence_type(evidence_type: str) -> str:
+    """Validate evidence type parameter"""
+    valid_types = ['visual', 'audio', 'multimodal']
+    if evidence_type not in valid_types:
+        raise ValueError(f"evidence_type must be one of {valid_types}, got {evidence_type}")
+    return evidence_type
+
+
+def validate_trial_name(trial_name: str) -> str:
+    """Validate trial name parameter"""
+    if not trial_name or not isinstance(trial_name, str):
+        raise ValueError("trial_name must be a non-empty string")
+    return trial_name
