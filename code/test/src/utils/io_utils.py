@@ -9,15 +9,9 @@ import datetime
 def get_json_files(trial):
     """Get JSON files for trials from various possible locations."""
     base_dirs_to_try = [
-        # From src/utils/ go up two levels to code/, then to trials/
-        os.path.join(os.path.dirname(__file__), '..', '..', 'trials', 'suspect', 'json'),
-        # From current working directory (code/)
+        os.path.join(os.path.dirname(__file__), '..', 'trials', 'suspect', 'json'),
         os.path.join('.', 'trials', 'suspect', 'json'),
-        # Alternative relative paths
-        'trials/suspect/json',
-        '../trials/suspect/json',
-        # Absolute path construction from code root
-        os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'trials', 'suspect', 'json')
+        '../trials/suspect/json'
     ]
     trial_json_path = None
     for base_dir in base_dirs_to_try:
@@ -43,13 +37,13 @@ def get_json_files(trial):
         raise IOError(f"Error accessing trial JSON files: {e}")
     
 
-def create_param_dir(log_dir, trial_name, w=0, naive_temp=0, soph_temp=0, max_steps=25, model_type="rsm"):
+def create_param_dir(log_dir, trial_name, cfg, model_type="rsm"):
     """Creates parameter-specific log directory."""
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     if model_type == "rsm":
-        param_subdir = f'w{w}_ntemp{naive_temp}_stemp{soph_temp}_steps{max_steps}_{timestamp}'
+        param_subdir = f'w{cfg.sampling.cost_weight}_ntemp{cfg.sampling.naive_temp}_stemp{cfg.sampling.sophisticated_temp}_steps{cfg.sampling.max_steps}_{timestamp}'
     elif model_type == "uniform":
-        param_subdir = f'uniform_steps{max_steps}'
+        param_subdir = f'uniform_steps{cfg.sampling.max_steps}'
     elif model_type == "empirical":
          param_subdir = 'empirical'
     else:

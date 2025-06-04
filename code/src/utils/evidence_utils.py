@@ -1,13 +1,14 @@
 from abc import ABC
+import json
 import logging
+import os
 from typing import Dict, List, Tuple, Any, Optional
 from dataclasses import dataclass
 
 from .math_utils import normalized_slider_prediction, smooth_likelihood_grid, smooth_likelihood_grid_connectivity_aware
-from src.evidence import VisualEvidence, generate_ground_truth_audio_sequences, single_segment_audio_likelihood
-from src.config import SimulationConfig, DetectiveTaskConfig
-from src.params import SimulationParams
-from src.plot import plot_smoothing_comparison
+from .io_utils import ensure_serializable
+from src.core.evidence import VisualEvidence, generate_ground_truth_audio_sequences, single_segment_audio_likelihood
+from src.cfg import SimulationConfig, DetectiveTaskConfig
 
 
 @dataclass
@@ -57,6 +58,10 @@ class VisualEvidenceProcessor(EvidenceProcessor):
         if not possible_crumb_coords:
             self.logger.warning("No valid crumb coordinates found")
             return PredictionResult({}, {}, {}, [])
+        
+        # Debug: show possible crumb coordinates
+        if task.agent_type_being_simulated == 'sophisticated':
+            self.logger.info(f"DEBUG: Possible crumb coordinates ({len(possible_crumb_coords)}): {sorted(possible_crumb_coords)}")
         
         # Calculate likelihoods for each possible crumb location
         agent_A_data = task.sampled_data.get('A', {})
@@ -120,9 +125,13 @@ class VisualEvidenceProcessor(EvidenceProcessor):
                     final_likelihood_map_B = smooth_likelihood_grid_connectivity_aware(raw_likelihood_map_B, task.world, sigma_steps)
                     
                     # Generate smoothing comparison plots for debugging
-                    plot_smoothing_comparison(task.trial_name, task.param_log_dir, raw_likelihood_map_A, raw_likelihood_map_B, task.world, detective_sigma)
+                    try:
+                        from src.analysis.plotting import plot_smoothing_comparison
+                        plot_smoothing_comparison(task.trial_name, task.param_log_dir, raw_likelihood_map_A, raw_likelihood_map_B, task.world, detective_sigma)
+                    except ImportError:
+                        self.logger.warning("Could not import plot_smoothing_comparison for debugging plots")
         
-        # Calculate predictions using final (possibly smoothed) likelihoods
+        # Calculate predictions using final (i.e. possibly smoothed) likelihoods
         prediction_data = []
         for crumb_coord in possible_crumb_coords:
             likelihood_A = final_likelihood_map_A[crumb_coord]
@@ -144,6 +153,9 @@ class VisualEvidenceProcessor(EvidenceProcessor):
             for coord in possible_crumb_coords
         }
         
+        # Save predictions to file
+        save_detective_predictions(prediction_data, task)
+        
         return PredictionResult(
             predictions=predictions,
             model_output_A=final_likelihood_map_A,
@@ -160,16 +172,8 @@ class AudioEvidenceProcessor(EvidenceProcessor):
         
         self.logger.info(f"Computing AUDIO detective predictions for {task.agent_type_being_simulated} agents")
         
-        temp_params = SimulationParams(
-            command='temp',
-            trial=task.trial_name,
-            evidence='audio',
-            max_steps=task.config.sampling.max_steps,
-            audio_gt_step_size=task.config.evidence.audio_gt_step_size
-        )
-        
         # Generate ground truth audio sequences  
-        gt_audio_sequences = generate_ground_truth_audio_sequences(task.world, temp_params)
+        gt_audio_sequences = generate_ground_truth_audio_sequences(task.world, task.config)
         if not gt_audio_sequences:
             self.logger.warning("No ground truth audio sequences generated")
             return PredictionResult({}, ([], []), ([], []), [])
@@ -206,6 +210,9 @@ class AudioEvidenceProcessor(EvidenceProcessor):
                 'likelihood_B': likelihood_B,
                 'prediction': prediction
             })
+        
+        # Save predictions to file
+        save_detective_predictions(prediction_data, task)
         
         return PredictionResult(
             predictions=predictions,
@@ -273,9 +280,28 @@ class MultimodalEvidenceProcessor(EvidenceProcessor):
         
         self.logger.info(f"Computing MULTIMODAL detective predictions for {task.agent_type_being_simulated} agents")
         
-        # Get predictions from both modalities
-        visual_result = self.visual_processor.compute_detective_predictions(task)
-        audio_result = self.audio_processor.compute_detective_predictions(task)
+        # Create separate tasks for each modality to prevent duplicate saves
+        visual_task = DetectiveTaskConfig(
+            world=task.world,
+            sampled_data=task.sampled_data,
+            agent_type_being_simulated=task.agent_type_being_simulated,
+            trial_name=task.trial_name,
+            param_log_dir=None,  # Don't save individual predictions for multimodal
+            config=task.config
+        )
+        
+        audio_task = DetectiveTaskConfig(
+            world=task.world,
+            sampled_data=task.sampled_data,
+            agent_type_being_simulated=task.agent_type_being_simulated,
+            trial_name=task.trial_name,
+            param_log_dir=None,  # Don't save individual predictions for multimodal
+            config=task.config
+        )
+        
+        # Get predictions from both modalities (without saving)
+        visual_result = self.visual_processor.compute_detective_predictions(visual_task)
+        audio_result = self.audio_processor.compute_detective_predictions(audio_task)
         
         # Combine predictions using weighted average
         visual_weight = task.config.evidence.visual_weight
@@ -297,9 +323,21 @@ class MultimodalEvidenceProcessor(EvidenceProcessor):
         # Combine prediction data
         combined_data = []
         if visual_result.prediction_data_for_json:
-            combined_data.extend([{**item, 'modality': 'visual'} for item in visual_result.prediction_data_for_json])
+            combined_data.extend([{**item, 'modality': 'visual', 'weight': visual_weight} for item in visual_result.prediction_data_for_json])
         if audio_result.prediction_data_for_json:
-            combined_data.extend([{**item, 'modality': 'audio'} for item in audio_result.prediction_data_for_json])
+            combined_data.extend([{**item, 'modality': 'audio', 'weight': audio_weight} for item in audio_result.prediction_data_for_json])
+        
+        # Add combined predictions to data
+        for key, combined_pred in combined_predictions.items():
+            combined_data.append({
+                'prediction_key': key,
+                'combined_prediction': combined_pred,
+                'visual_weight': visual_weight,
+                'audio_weight': audio_weight
+            })
+        
+        # Save multimodal predictions
+        save_detective_predictions(combined_data, task)
         
         return PredictionResult(
             predictions=combined_predictions,
@@ -319,3 +357,55 @@ def create_evidence_processor(evidence_type: str) -> EvidenceProcessor:
         return MultimodalEvidenceProcessor()
     else:
         raise ValueError(f"Unknown evidence type: {evidence_type}") 
+
+
+def save_detective_predictions(prediction_data: List[Dict], task: DetectiveTaskConfig) -> None:
+    """Save detective prediction results to JSON file."""
+    if not task.param_log_dir or not prediction_data:
+        return
+        
+    logger = logging.getLogger(__name__)
+    
+    # Create filename based on simulation parameters
+    evidence_type = task.config.evidence.evidence_type
+    filename = f"{task.trial_name}_{task.agent_type_being_simulated}_{evidence_type}_predictions.json"
+    filepath = os.path.join(task.param_log_dir, filename)
+    
+    try:
+        # Add metadata to predictions
+        output_data = {
+            'trial_name': task.trial_name,
+            'agent_type_being_simulated': task.agent_type_being_simulated,
+            'evidence_type': evidence_type,
+            'predictions': ensure_serializable(prediction_data)
+        }
+        
+        with open(filepath, 'w') as f:
+            json.dump(output_data, f, indent=4)
+        
+        logger.info(f"Saved {len(prediction_data)} detective predictions to {filename}")
+        
+    except Exception as e:
+        logger.error(f"Error saving detective predictions to {filename}: {e}")
+        
+        # Try to save a minimal version
+        try:
+            minimal_data = {
+                'trial_name': task.trial_name,
+                'agent_type_being_simulated': task.agent_type_being_simulated,
+                'evidence_type': evidence_type,
+                'num_predictions': len(prediction_data),
+                'error': str(e)
+            }
+            
+            minimal_filename = filename.replace('.json', '_minimal.json')
+            minimal_filepath = os.path.join(task.param_log_dir, minimal_filename)
+            
+            with open(minimal_filepath, 'w') as f:
+                json.dump(minimal_data, f, indent=4)
+                
+            logger.info(f"Saved minimal prediction summary to {minimal_filename}")
+            
+        except Exception as e2:
+            logger.error(f"Error saving minimal predictions: {e2}") 
+    

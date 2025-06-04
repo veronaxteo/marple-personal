@@ -1,4 +1,4 @@
-naive_cat,soph_cat,crumb_location,trial,naive_prediction,soph_prediction,naive_evidence_A,naive_evidence_B,soph_evidence_A,soph_evidence_B
+naive_cat,soph_cat,crumb_location,trial,naive_prediction,soph_prediction,naive_cfg.evidence.type_A,naive_cfg.evidence.type_B,soph_cfg.evidence.type_A,soph_cfg.evidence.type_B
 A,A,"(6, 3)",snack10,-50.0,-37.0,1.0,0.0,1.0,0.15
 A,A,"(6, 3)",snack7,-50.0,-34.0,1.0,0.0,1.0,0.188
 A,A,"(3, 9)",snack3,-50.0,-23.0,1.0,0.0,1.0,0.374

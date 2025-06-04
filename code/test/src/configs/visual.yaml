@@ -1,0 +1,40 @@
+# Visual Evidence Simulation Configuration
+command: rsm
+seed: 42
+log_dir: "../../results/visual"
+save_intermediate_results: true
+
+# Trial configuration
+trial:
+  name: snack1
+  data_dir: "trials"
+  suspect_subdir: "suspect/json"
+  detective_subdir: "detective/json"
+  file_extension: ".json"
+
+# Path sampling configuration
+sampling:
+  num_suspect_paths: 50
+  num_detective_paths: 1000
+  max_steps: 25
+  max_steps_middle: 25
+  naive_temp: 0.05
+  sophisticated_temp: 0.05
+  cost_weight: 0.1 
+  noisy_planting_sigma: 0.5
+
+# Visual evidence configuration
+evidence:
+  type: visual
+  visual_smoothing_sigma: 1.0
+  sophisticated_detective_sigma: 3.0
+  sophisticated_suspect_sigma: 1.0
+  audio_similarity_sigma: 0.1  # Not used for visual
+  audio_gt_step_size: 2  # Not used for visual
+  multimodal_weight: 0.5  # Not used for visual
+  door_close_prob: 0.0
+  crumb_sigma: 0.0
+
+# Empirical (optional)
+empirical_paths: null
+mismatched_analysis: false 

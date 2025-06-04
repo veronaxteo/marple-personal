@@ -1,0 +1,33 @@
+# Default config parameters
+
+# Sampling
+sampling:
+  max_steps: 25
+  max_steps_middle: 25  # TODO: don't need separate max_steps_middle
+  num_suspect_paths: 50
+  num_detective_paths: 1000
+  seed: 42
+  naive_temp: 0.01
+  sophisticated_temp: 0.01
+  cost_weight: 0.1
+
+# Evidence
+evidence:
+  naive_detective_sigma: 2.0 
+  crumb_planting_sigma: 2.0 
+  sophisticated_detective_sigma: 2.0
+  
+  # Audio
+  audio_similarity_sigma: 0.1
+  audio_gt_step_size: 2
+  
+  # Multimodal
+  visual_weight: 0.5  # weight for visual vs audio in multimodal
+
+# Simulation
+simulation:
+  log_dir: "../../results"
+
+# TODO: move to under simulation?
+default_trial: "snack1"
+default_evidence: "visual"
