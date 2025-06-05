@@ -99,7 +99,7 @@ class World:
         """Get fridge access point coordinate"""
         return self.geometry.get_fridge_access_point()
 
-    def get_valid_kitchen_crumb_coords_world(self):
+    def get_valid_kitchen_crumb_coords(self):
         """Get list of valid world coordinates for crumbs in kitchen"""
         return self.geometry.get_valid_kitchen_crumb_coords(self.kitchen_info, self.world_graph.node_to_vid, self.world_graph.igraph)
 

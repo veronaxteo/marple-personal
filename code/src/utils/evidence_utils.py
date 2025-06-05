@@ -54,14 +54,10 @@ class VisualEvidenceProcessor(EvidenceProcessor):
         self.logger.info(f"Computing VISUAL detective predictions for {task.agent_type_being_simulated} agents")
         
         # Get possible crumb locations
-        possible_crumb_coords = task.world.get_valid_kitchen_crumb_coords_world()
+        possible_crumb_coords = task.world.get_valid_kitchen_crumb_coords()
         if not possible_crumb_coords:
             self.logger.warning("No valid crumb coordinates found")
             return PredictionResult({}, {}, {}, [])
-        
-        # Debug: show possible crumb coordinates
-        if task.agent_type_being_simulated == 'sophisticated':
-            self.logger.info(f"DEBUG: Possible crumb coordinates ({len(possible_crumb_coords)}): {sorted(possible_crumb_coords)}")
         
         # Calculate likelihoods for each possible crumb location
         agent_A_data = task.sampled_data.get('A', {})
@@ -74,10 +70,6 @@ class VisualEvidenceProcessor(EvidenceProcessor):
         agent_B_sequences = agent_B_data.get('full_sequences', [])
         agent_B_middle_sequences = agent_B_data.get('middle_sequences', [])
         agent_B_plant_spots = agent_B_data.get('chosen_plant_spots', [])
-        
-        if not agent_A_sequences or not agent_B_sequences:
-            self.logger.warning("Missing agent sequences for visual evidence calculation")
-            return PredictionResult({}, {}, {}, [])
         
         # Calculate raw likelihoods for each crumb coordinate
         raw_likelihood_map_A = {}

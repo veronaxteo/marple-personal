@@ -47,7 +47,7 @@ def smooth_likelihood_grid(raw_likelihoods_map: dict, world, sigma: float) -> di
     
     smoothed_likelihoods_map = {}
 
-    possible_crumb_coords = world.get_valid_kitchen_crumb_coords_world()
+    possible_crumb_coords = world.get_valid_kitchen_crumb_coords()
     if not possible_crumb_coords:
         possible_crumb_coords = raw_likelihoods_map.keys()
 
@@ -76,7 +76,7 @@ def smooth_likelihood_grid_connectivity_aware(raw_likelihoods_map: dict, world, 
         return raw_likelihoods_map
     
     # Get valid kitchen coordinates for bounds checking
-    valid_coords = set(world.get_valid_kitchen_crumb_coords_world())
+    valid_coords = set(world.get_valid_kitchen_crumb_coords())
     if not valid_coords:
         return raw_likelihoods_map
     

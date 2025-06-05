@@ -7,6 +7,7 @@ for both naive (random) and sophisticated (strategic) agents.
 
 import logging
 from typing import List, Tuple, Optional
+import numpy as np
 
 
 def get_visual_evidence_likelihood(crumb_coord_tuple: Tuple[int, int], 
@@ -16,11 +17,11 @@ def get_visual_evidence_likelihood(crumb_coord_tuple: Tuple[int, int],
                                  agent_type_being_simulated: str = 'naive',
                                  chosen_plant_spots_for_sequences: Optional[List] = None) -> float:
     """
-    Calculate likelihood of observing a crumb at given coordinates.
+    Calculate likelihood of observing a crumb at given a given kitchen coordinate.
     Handles both naive (random crumb dropping) and sophisticated (strategic planting) agents.
     
     Args:
-        crumb_coord_tuple: (x, y) coordinates where crumb was observed
+        crumb_coord_tuple: (x, y) coordinate where crumb was observed
         agent_full_sequences: List of complete agent path sequences
         agent_middle_sequences: List of middle path segments (fridge to door)
         world_state: World object containing environment information
@@ -34,33 +35,38 @@ def get_visual_evidence_likelihood(crumb_coord_tuple: Tuple[int, int],
     total_likelihood = 0.0
     num_sequences = len(agent_full_sequences)
     
-    if num_sequences == 0:
-        return 0.0
-
     fridge_access_point = world_state.get_fridge_access_point()
     initial_door_states = world_state.get_initial_door_states()
     middle_sequence_lengths = [len(seq) if seq else 1 for seq in agent_middle_sequences]
+    num_possible_crumbs = len(world_state.get_valid_kitchen_crumb_coords())
+
+    weighted_visit_count = 0.0
 
     for i, sequence in enumerate(agent_full_sequences):
         current_middle_len = middle_sequence_lengths[i]
         if current_middle_len == 0:
             current_middle_len = 1
 
-        likelihood_for_sequence = 0.0
+        # likelihood_for_sequence = 0.0
+        weight = 0.0
         
+        # Sophisticated detective
         if agent_type_being_simulated == 'sophisticated':
-            # Sophisticated agents plant crumbs strategically
+            # Sophisticated suspects plant crumbs strategically
             if (chosen_plant_spots_for_sequences is not None and 
                 len(chosen_plant_spots_for_sequences) == num_sequences):
                 chosen_plant_spot = chosen_plant_spots_for_sequences[i]
                 if chosen_plant_spot is not None and crumb_coord_tuple == chosen_plant_spot:
-                    likelihood_for_sequence = 1.0
+                    # likelihood_for_sequence = 1.0
+                    weight = 1.0
                 else:
-                    pass  # No match, keep likelihood_for_sequence = 0.0
+                    pass  # No match, likelihood_for_sequence = 0.0
             else:
                 logger.warning(f"Chosen plant spots not provided for sophisticated agent: spots={chosen_plant_spots_for_sequences is not None}, len_check={len(chosen_plant_spots_for_sequences) if chosen_plant_spots_for_sequences else 'N/A'}, num_seq={num_sequences}")
+       
+        # Naive detective
         else:
-            # Naive agents drop crumbs randomly in kitchen on return path
+            # Naive suspects drop crumbs randomly in kitchen on return path
             simulated_door_states = initial_door_states.copy()
             on_return = False
             generated_crumbs = set()
@@ -93,10 +99,16 @@ def get_visual_evidence_likelihood(crumb_coord_tuple: Tuple[int, int],
                     generated_crumbs.add(coord)
             
             if crumb_coord_tuple in generated_crumbs:
-                likelihood_for_sequence = 1.0 / current_middle_len
+                # likelihood_for_sequence = 1.0 / current_middle_len  # likelihood weighted by path length
+                weight = 1.0 / current_middle_len  # count weighted by path length
         
-        total_likelihood += likelihood_for_sequence
+        # total_likelihood += likelihood_for_sequence
+        weighted_visit_count += weight
     
-    final_likelihood = total_likelihood / num_sequences
-    
+    # final_likelihood = total_likelihood / num_sequences  # old likelihood
+
+    # laplace-like smoothing (not exactly because we're not adding a pseudo-count to the counts)
+    alpha = 0.01
+    final_likelihood = (weighted_visit_count + alpha) / (num_sequences + alpha * num_possible_crumbs)
+
     return final_likelihood 

@@ -42,6 +42,7 @@ class RSMSimulator(BaseSimulator):
         naive_B_model = naive_detective_result['model_output_B']
 
         # Process naive models for sophisticated suspects
+        # Note: smoothing only done after naive detective predictions (smoothing for sophisticated agents only)
         self._process_naive_models_for_sophisticated(naive_A_model, naive_B_model, world)
         
         # Level 2: Sophisticated agents

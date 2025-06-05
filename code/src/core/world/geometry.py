@@ -58,3 +58,4 @@ class WorldGeometry:
         
         self._valid_kitchen_crumb_coords_cache = sorted(valid_coords)
         return self._valid_kitchen_crumb_coords_cache 
+    
