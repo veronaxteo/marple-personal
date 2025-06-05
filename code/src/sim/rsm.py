@@ -1,5 +1,4 @@
-import logging
-from src.utils.math_utils import smooth_likelihood_grid_connectivity_aware
+from src.utils.math_utils import compute_all_graph_neighbors, smooth_likelihoods
 from src.utils.io_utils import save_sampled_paths_to_csv
 from src.core.world import World
 from src.core.world.utils import load_or_compute_simple_path_sequences
@@ -67,7 +66,7 @@ class RSMSimulator(BaseSimulator):
         }
 
     def _process_naive_models_for_sophisticated(self, naive_A_model, naive_B_model, world):
-        """Process naive detective models for use by sophisticated suspects"""
+        """Process naive detective models for use by sophisticated suspects."""
         if self.config.evidence.evidence_type == 'visual':
             # Apply smoothing if specified
             smoothed_A_map = naive_A_model
@@ -77,8 +76,9 @@ class RSMSimulator(BaseSimulator):
                 self.logger.info(f"Smoothing visual likelihood maps (sigma={self.config.evidence.naive_detective_sigma})")
                 # Connectivity-aware smoothing
                 sigma_steps = max(1, int(self.config.evidence.naive_detective_sigma))
-                smoothed_A_map = smooth_likelihood_grid_connectivity_aware(naive_A_model, world, sigma_steps)
-                smoothed_B_map = smooth_likelihood_grid_connectivity_aware(naive_B_model, world, sigma_steps)
+                neighbors = compute_all_graph_neighbors(world, naive_A_model.keys())
+                smoothed_A_map = smooth_likelihoods(naive_A_model, sigma_steps, neighbors)
+                smoothed_B_map = smooth_likelihoods(naive_B_model, sigma_steps, neighbors)
             
             self.config.evidence.naive_A_visual_likelihoods_map = smoothed_A_map
             self.config.evidence.naive_B_visual_likelihoods_map = smoothed_B_map
@@ -94,3 +94,4 @@ class RSMSimulator(BaseSimulator):
                            f"A_from({len(self.config.evidence.naive_A_from_fridge_steps_model)}), "
                            f"B_to({len(self.config.evidence.naive_B_to_fridge_steps_model)}), "
                            f"B_from({len(self.config.evidence.naive_B_from_fridge_steps_model)})") 
+            

@@ -7,7 +7,6 @@ for both naive (random) and sophisticated (strategic) agents.
 
 import logging
 from typing import List, Tuple, Optional
-import numpy as np
 
 
 def get_visual_evidence_likelihood(crumb_coord_tuple: Tuple[int, int], 
@@ -52,7 +51,7 @@ def get_visual_evidence_likelihood(crumb_coord_tuple: Tuple[int, int],
         
         # Sophisticated detective
         if agent_type_being_simulated == 'sophisticated':
-            # Sophisticated suspects plant crumbs strategically
+            # Sophisticated suspects plant crumbs deliberately
             if (chosen_plant_spots_for_sequences is not None and 
                 len(chosen_plant_spots_for_sequences) == num_sequences):
                 chosen_plant_spot = chosen_plant_spots_for_sequences[i]
@@ -60,9 +59,9 @@ def get_visual_evidence_likelihood(crumb_coord_tuple: Tuple[int, int],
                     # likelihood_for_sequence = 1.0
                     weight = 1.0
                 else:
-                    pass  # No match, likelihood_for_sequence = 0.0
+                    pass  # no match    
             else:
-                logger.warning(f"Chosen plant spots not provided for sophisticated agent: spots={chosen_plant_spots_for_sequences is not None}, len_check={len(chosen_plant_spots_for_sequences) if chosen_plant_spots_for_sequences else 'N/A'}, num_seq={num_sequences}")
+                logger.warning(f"Chosen plant spots not provided for sophisticated agent.")
        
         # Naive detective
         else:
@@ -108,7 +107,9 @@ def get_visual_evidence_likelihood(crumb_coord_tuple: Tuple[int, int],
     # final_likelihood = total_likelihood / num_sequences  # old likelihood
 
     # laplace-like smoothing (not exactly because we're not adding a pseudo-count to the counts)
-    alpha = 0.01
+    # smaller alpha for naive because weighted probabilities on smaller scale
+    # regular laplace smoothing for sophisticated, alpha=1.0 default
+    alpha = 0.01 if agent_type_being_simulated == 'naive' else 1.0
     final_likelihood = (weighted_visit_count + alpha) / (num_sequences + alpha * num_possible_crumbs)
 
     return final_likelihood 

@@ -16,7 +16,7 @@ class WorldGraph:
         self.logger = logging.getLogger(self.__class__.__name__)
     
     def create_graph(self, world_info: Dict, geometry) -> None:
-        """Create the igraph representation of the world"""
+        """Create the igraph representation of the world."""
         self.igraph = Graph(directed=False)
         self.node_to_vid = {}
         self.vid_to_node = {}
@@ -86,7 +86,7 @@ class WorldGraph:
         self._add_door_connections(world_info)
     
     def _add_door_connections(self, world_info: Dict) -> None:
-        """Add edges connecting doors to adjacent rooms"""
+        """Add edges connecting doors to adjacent rooms."""
         door_connection_edges = []
         for door_info in world_info['doors']['initial']:
             door_pos = tuple(door_info['pos'])
@@ -108,7 +108,9 @@ class WorldGraph:
         self.igraph.add_edges(unique_door_edges)
     
     def find_closest_door_to_agent(self, agent_start_pos: Tuple[int, int]) -> Optional[Tuple[int, int]]:
-        """Find closest door node to agent start position"""
+        """
+        Find closest door node to agent start position.
+        """
         if agent_start_pos not in self.node_to_vid:
             self.logger.error(f"Agent start position {agent_start_pos} not found in graph")
             return None
@@ -153,7 +155,9 @@ class WorldGraph:
 
 
 def get_shortest_paths(igraph_instance, source_vid: int, target_vid: int, vid_to_node_map: dict):
-    """Finds all shortest paths between source and target in an igraph graph."""
+    """
+    Finds all shortest paths between source and target in an igraph graph.
+    """
     logger = logging.getLogger(__name__)
     try:
         vid_paths = igraph_instance.get_all_shortest_paths(source_vid, to=target_vid, weights=None, mode='all')
@@ -168,7 +172,9 @@ def get_shortest_paths(igraph_instance, source_vid: int, target_vid: int, vid_to
 
 
 def get_simple_paths(igraph_instance, source_vid: int, target_vid: int, cutoff: int, vid_to_node_map: dict):
-    """Finds all simple paths up to cutoff length using igraph."""
+    """
+    Finds all simple paths up to cutoff length using igraph.
+    """
     logger = logging.getLogger(__name__)
     try:
         vid_paths = igraph_instance.get_all_simple_paths(source_vid, to=target_vid, cutoff=cutoff, mode='all')
@@ -179,4 +185,12 @@ def get_simple_paths(igraph_instance, source_vid: int, target_vid: int, cutoff: 
         return coord_paths
     except Exception as e:
         logger.warning(f"Error finding simple paths between vertex IDs {source_vid} and {target_vid} with cutoff {cutoff} using igraph: {e}")
-        return [] 
+        return []
+
+
+def get_shortest_path_length(igraph_instance, source_vid: int, target_vid: int) -> Optional[int]:
+    """
+    Get shortest path length between two vertices in an igraph graph.
+    """
+    path_matrix = igraph_instance.shortest_paths(source=source_vid, target=target_vid)
+    return int(path_matrix[0][0]) if path_matrix and path_matrix[0] and path_matrix[0][0] != float('inf') else None 

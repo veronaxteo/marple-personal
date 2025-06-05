@@ -28,8 +28,8 @@ from .io_utils import (
 
 from .math_utils import (
     normalized_slider_prediction,
-    smooth_likelihood_grid,
-    smooth_likelihood_grid_connectivity_aware
+    compute_all_graph_neighbors,
+    smooth_likelihoods
 )
 
 from .cache import (
@@ -56,8 +56,8 @@ __all__ = [
     
     # Math utilities
     'normalized_slider_prediction',
-    'smooth_likelihood_grid',
-    'smooth_likelihood_grid_connectivity_aware',
+    'compute_all_graph_neighbors',
+    'smooth_likelihoods',
     
     # Caching
     'PathSequenceCache',

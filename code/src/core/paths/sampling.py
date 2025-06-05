@@ -7,12 +7,11 @@ and agent behaviors (naive, sophisticated).
 
 import numpy as np
 import logging
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple
 from dataclasses import dataclass
 
-from src.utils.math_utils import softmax_list_vals, normalized_slider_prediction
-from src.core.evidence import get_compressed_audio_from_path, single_segment_audio_likelihood
-from src.cfg import SimulationConfig, PathSamplingTask
+from src.core.evidence import get_compressed_audio_from_path
+from src.cfg import PathSamplingTask
 from .utilities import (
     calculate_audio_utilities,
     group_paths_by_length,
@@ -38,14 +37,14 @@ class SamplingResult:
 
 
 class PathSampler:
-    """Handles path sampling logic for different evidence types and agent behaviors"""
-    
-    def __init__(self):
+    """Handles path sampling logic for different evidence types and agent behaviors."""
+    def __init__(self, world):
         self.logger = logging.getLogger(self.__class__.__name__)
         self.audio_framing_cache = {}
+        self.world = world
     
     def sample_paths(self, task: PathSamplingTask) -> Dict:
-        """Main entry point for path sampling with new config system"""
+        """Main entry point for path sampling."""
         
         if task.config.evidence.evidence_type == 'visual':
             return self._sample_visual_paths(task)
@@ -55,24 +54,9 @@ class PathSampler:
             raise ValueError(f"Unsupported evidence type: {task.config.evidence.evidence_type}")
     
     def _sample_visual_paths(self, task: PathSamplingTask) -> Dict:
-        """Sample paths for visual evidence using new config system"""
+        """Sample paths for visual evidence."""
         
         sequences_p1, sequences_p2, sequences_p3, sequences_fridge_to_start = task.simple_path_sequences
-        
-        # Check if sequences are available
-        if not sequences_p2:
-            self.logger.error(f"No fridge-to-door paths available for agent {task.agent_id}. "
-                             f"This usually indicates world connectivity issues or restrictive max_steps ({task.config.sampling.max_steps})")
-            # Return empty result
-            return SamplingResult([], [], [], [], [], [], [], []).__dict__
-        
-        if not sequences_p1:
-            self.logger.error(f"No start-to-fridge paths available for agent {task.agent_id}")
-            return SamplingResult([], [], [], [], [], [], [], []).__dict__
-            
-        if not sequences_p3:
-            self.logger.error(f"No door-to-start paths available for agent {task.agent_id}")
-            return SamplingResult([], [], [], [], [], [], [], []).__dict__
         
         # Calculate utilities and probabilities for P2 (Fridge->Door)
         utilities, optimal_plant_spots = self._calculate_visual_utilities(task, sequences_p2)
@@ -111,11 +95,16 @@ class PathSampler:
             
             # Handle plant spots for sophisticated agents
             chosen_plant_spot = None
+            valid_plant_spots = set(self.world.get_valid_kitchen_crumb_coords())
+
             if task.agent_type == 'sophisticated' and optimal_plant_spots[idx2] is not None:
                 optimal_spot = optimal_plant_spots[idx2]
                 if task.config.evidence.crumb_planting_sigma > 0:
+                    # add noise to crumb planting execution
                     chosen_plant_spot = get_noisy_plant_spot(
-                        task.world, optimal_spot, task.config.evidence.crumb_planting_sigma
+                        optimal_spot, 
+                        task.config.evidence.crumb_planting_sigma, 
+                        valid_plant_spots
                     )
                 else:
                     chosen_plant_spot = optimal_spot
@@ -124,7 +113,7 @@ class PathSampler:
         return result.__dict__
     
     def _sample_audio_paths(self, task: PathSamplingTask) -> Dict:
-        """Sample paths for audio evidence using new config system"""
+        """Sample paths for audio evidence."""
         
         sequences_p1, sequences_p2, sequences_p3, sequences_fridge_to_start = task.simple_path_sequences
         candidate_paths_to_fridge = sequences_p1
@@ -181,21 +170,10 @@ class PathSampler:
         task: PathSamplingTask,
         sequences_p2: List
     ) -> Tuple[np.ndarray, List]:
-        """Calculate utilities for visual path segments (P2: Fridge->Door)"""
-        
-        # Safety check for empty sequences
-        if not sequences_p2:
-            self.logger.error(f"No sequences found from fridge to door for agent {task.agent_id}. "
-                             f"Check world connectivity and max_steps parameter ({task.config.sampling.max_steps})")
-            return np.array([]), []
+        """Calculate utilities for visual path segments (P2: Fridge->Door)."""
         
         # Calculate length-based utilities
         middle_path_lengths = np.array([len(seq) for seq in sequences_p2])
-        
-        # Safety check for empty lengths array
-        if len(middle_path_lengths) == 0:
-            self.logger.error(f"No valid path lengths found for agent {task.agent_id}")
-            return np.array([]), []
         
         min_len, max_len = np.min(middle_path_lengths), np.max(middle_path_lengths)
         rescaled_lengths = np.zeros_like(middle_path_lengths, dtype=float)
@@ -214,7 +192,7 @@ class PathSampler:
                 )
                 optimal_plant_spots[idx] = optimal_spot
                 
-                path_framing_metric_scaled = best_slider / 100.0
+                path_framing_metric_scaled = best_slider / 100.0  # [-0.5, 0.5]
                 utility_factor = task.config.sampling.cost_weight * (1 - rescaled_lengths[idx])
                 
                 if task.agent_id == 'A':
@@ -229,3 +207,4 @@ class PathSampler:
                 utilities.append(task.config.sampling.cost_weight * (1 - l_rescaled))
         
         return np.array(utilities), optimal_plant_spots 
+    

@@ -27,12 +27,7 @@ class World:
             'B': tuple(info['agents']['initial'][1]['pos'])
         }
         
-        # Find kitchen info
         self.kitchen_info = next((r for r in info['rooms']['initial'] if r['type'] == 'Kitchen'), None)
-        if self.kitchen_info is None:
-            raise ValueError("Kitchen room information not found.")
-
-        # Initialize components
         self._initialize_components(info)
 
 
@@ -43,7 +38,7 @@ class World:
         self.world_graph = WorldGraph()
         self.world_graph.create_graph(info, self.geometry)
         self.subgoal_planner = SubgoalPlanner(self.world_graph, self.geometry)
-        self.path_sampler = PathSampler()
+        self.path_sampler = PathSampler(self)
 
 
     @staticmethod

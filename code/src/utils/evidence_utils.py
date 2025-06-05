@@ -5,7 +5,7 @@ import os
 from typing import Dict, List, Tuple, Any, Optional
 from dataclasses import dataclass
 
-from .math_utils import normalized_slider_prediction, smooth_likelihood_grid, smooth_likelihood_grid_connectivity_aware
+from .math_utils import compute_all_graph_neighbors, normalized_slider_prediction, smooth_likelihoods_old, smooth_likelihoods
 from .io_utils import ensure_serializable
 from src.core.evidence import VisualEvidence, generate_ground_truth_audio_sequences, single_segment_audio_likelihood
 from src.cfg import SimulationConfig, DetectiveTaskConfig
@@ -108,13 +108,14 @@ class VisualEvidenceProcessor(EvidenceProcessor):
                 self.logger.info(f"Smoothing visual likelihood maps (sigma={detective_sigma})")
                 if raw_likelihood_map_A and raw_likelihood_map_B:
                     # 2D grid-based smoothing without furniture awareness
-                    # final_likelihood_map_A = smooth_likelihood_grid(raw_likelihood_map_A, task.world, detective_sigma)
-                    # final_likelihood_map_B = smooth_likelihood_grid(raw_likelihood_map_B, task.world, detective_sigma)
+                    # final_likelihood_map_A = smooth_likelihoods_old(raw_likelihood_map_A, task.world, detective_sigma)
+                    # final_likelihood_map_B = smooth_likelihoods_old(raw_likelihood_map_B, task.world, detective_sigma)
                     
                     # Connectivity-aware smoothing
                     sigma_steps = max(1, int(detective_sigma))  # Convert sigma to discrete steps
-                    final_likelihood_map_A = smooth_likelihood_grid_connectivity_aware(raw_likelihood_map_A, task.world, sigma_steps)
-                    final_likelihood_map_B = smooth_likelihood_grid_connectivity_aware(raw_likelihood_map_B, task.world, sigma_steps)
+                    neighbors = compute_all_graph_neighbors(task.world, raw_likelihood_map_A.keys())
+                    final_likelihood_map_A = smooth_likelihoods(raw_likelihood_map_A, sigma_steps, neighbors)
+                    final_likelihood_map_B = smooth_likelihoods(raw_likelihood_map_B, sigma_steps, neighbors)
                     
                     # Generate smoothing comparison plots for debugging
                     try:

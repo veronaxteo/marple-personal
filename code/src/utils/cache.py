@@ -20,7 +20,9 @@ class PathSequenceCache:
         self.logger = logging.getLogger(self.__class__.__name__)
     
     def _load_from_cache(self, pickle_path: str, evidence_type_str: str, trial_name: str) -> Optional[Tuple]:
-        """Try to load cached path sequences."""
+        """
+        Try to load cached path sequences.
+        """
         if not os.path.exists(pickle_path):
             return None
             
@@ -59,7 +61,9 @@ class PathSequenceCache:
     
     def _save_to_cache(self, pickle_path: str, paths_A_tuple: Tuple, paths_B_tuple: Tuple, 
                       evidence_type_str: str, trial_name: str) -> None:
-        """Save computed path sequences to cache."""
+        """
+        Save computed path sequences to cache.
+        """
         try:
             os.makedirs(os.path.dirname(pickle_path), exist_ok=True)
             cached_data = {'A': paths_A_tuple, 'B': paths_B_tuple}
@@ -82,14 +86,6 @@ class SimulationDataCache:
     def save(self, key: str, data: Any, subdir: str = None) -> bool:
         """
         Save data to cache with the given key.
-        
-        Args:
-            key: Unique identifier for the cached data
-            data: Data to cache (must be pickle-serializable)
-            subdir: Optional subdirectory within cache_dir
-            
-        Returns:
-            True if successful, False otherwise
         """
         try:
             cache_path = os.path.join(self.cache_dir, subdir or "", f"{key}.pkl")
@@ -107,13 +103,6 @@ class SimulationDataCache:
     def load(self, key: str, subdir: str = None) -> Optional[Any]:
         """
         Load data from cache with the given key.
-        
-        Args:
-            key: Unique identifier for the cached data
-            subdir: Optional subdirectory within cache_dir
-            
-        Returns:
-            Cached data if found, None otherwise
         """
         try:
             cache_path = os.path.join(self.cache_dir, subdir or "", f"{key}.pkl")
@@ -136,16 +125,7 @@ class SimulationDataCache:
         return os.path.exists(cache_path)
     
     def clear(self, key: str = None, subdir: str = None) -> bool:
-        """
-        Clear cached data.
-        
-        Args:
-            key: Specific key to clear (if None, clears all in subdir)
-            subdir: Subdirectory to clear (if None, clears entire cache)
-            
-        Returns:
-            True if successful, False otherwise
-        """
+        """Clear cached data."""
         try:
             if key:
                 # Clear specific key

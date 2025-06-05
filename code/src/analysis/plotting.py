@@ -14,7 +14,7 @@ import json
 import logging
 from typing import Dict
 from ..core.world import World
-from ..utils.math_utils import smooth_likelihood_grid, smooth_likelihood_grid_connectivity_aware
+from ..utils.math_utils import smooth_likelihoods_old,compute_all_graph_neighbors, smooth_likelihoods
 
 
 def plot_smoothing_comparison(trial_name: str, param_log_dir: str, raw_likelihood_map_A: Dict, 
@@ -29,12 +29,13 @@ def plot_smoothing_comparison(trial_name: str, param_log_dir: str, raw_likelihoo
     sigma_steps = max(1, int(sigma_value))
     
     # 2d grid-based smoothing
-    old_smoothed_A = smooth_likelihood_grid(raw_likelihood_map_A, world, sigma_value)
-    old_smoothed_B = smooth_likelihood_grid(raw_likelihood_map_B, world, sigma_value)
+    old_smoothed_A = smooth_likelihoods_old(raw_likelihood_map_A, world, sigma_value)
+    old_smoothed_B = smooth_likelihoods_old(raw_likelihood_map_B, world, sigma_value)
     
     # Connectivity-aware smoothing
-    new_smoothed_A = smooth_likelihood_grid_connectivity_aware(raw_likelihood_map_A, world, sigma_steps)
-    new_smoothed_B = smooth_likelihood_grid_connectivity_aware(raw_likelihood_map_B, world, sigma_steps)
+    precomputed_neighbors = compute_all_graph_neighbors(world, raw_likelihood_map_A.keys())
+    new_smoothed_A = smooth_likelihoods(raw_likelihood_map_A, sigma_steps, precomputed_neighbors)
+    new_smoothed_B = smooth_likelihoods(raw_likelihood_map_B, sigma_steps, precomputed_neighbors)
     
     # Create comparison plots for Agent A
     _create_smoothing_comparison_plot(

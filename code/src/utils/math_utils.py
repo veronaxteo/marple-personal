@@ -2,29 +2,32 @@ import numpy as np
 from numpy.random import rand
 from scipy.ndimage import gaussian_filter
 from collections import deque
+from typing import List
 
 
-def normalized_slider_prediction(value_A, value_B):
-    """Calculate normalized slider prediction between two values."""
+def normalized_slider_prediction(value_A: float, value_B: float) -> int:
+    """
+    Calculate normalized slider prediction between two values, [-50, 50].
+    """
     if sum([value_A, value_B]) == 0: 
         return 0
     else: 
         return round(100 * (value_B / (value_A + value_B)) - 50, 0)
 
 
-def softmax_list_vals(vals, temp):
+def softmax_list_vals(vals: List[float], temp: float) -> List[float]:
     """Apply softmax with temperature to a list of values."""
     return np.exp(np.array(vals) / temp) / np.sum(np.exp(np.array(vals) / temp), axis=0)
 
 
-def flip(p):
+def flip(p: float) -> bool:
     """Flip a coin with probability p."""
     if rand() < p:
         return True
     return False
 
 
-def smooth_likelihood_grid(raw_likelihoods_map: dict, world, sigma: float) -> dict:
+def smooth_likelihoods_old(raw_likelihoods_map: dict, world, sigma: float) -> dict:
     """
     Applies Gaussian smoothing to a grid of likelihoods.
 
@@ -59,112 +62,50 @@ def smooth_likelihood_grid(raw_likelihoods_map: dict, world, sigma: float) -> di
     return smoothed_likelihoods_map
 
 
-def smooth_likelihood_grid_connectivity_aware(raw_likelihoods_map: dict, world, sigma_steps: int) -> dict:
+# TODO: move to other file
+def smooth_likelihoods(raw_likelihoods_map: dict, sigma_steps: int, precomputed_neighbors: dict) -> dict:
     """
-    Apply connectivity-aware smoothing that respects the navigation graph structure.
-    Spreads likelihood only along valid paths.
-    
-    Args:
-        raw_likelihoods_map: Map from world coordinate tuples to likelihood values
-        world: World object containing the navigation graph
-        sigma_steps: Number of graph steps over which to spread the smoothing effect
+    Iteratively averages likelihoods with precomputed connected kitchen neighbors.
+    """
+    current_likelihoods = raw_likelihoods_map.copy()
+
+    coords_to_process = list(raw_likelihoods_map.keys())
+
+    for _ in range(sigma_steps):
+        likelihoods_at_step_start = current_likelihoods.copy()
         
-    Returns:
-        dict: Smoothed likelihood map respecting graph connectivity
-    """
-    if sigma_steps <= 0:
-        return raw_likelihoods_map
-    
-    # Get valid kitchen coordinates for bounds checking
-    valid_coords = set(world.get_valid_kitchen_crumb_coords())
-    if not valid_coords:
-        return raw_likelihoods_map
-    
-    # Initialize smoothed map with zeros
-    smoothed_map = {coord: 0.0 for coord in valid_coords}
-    
-    # For each coordinate with likelihood, spread it along the graph
-    for source_coord, source_likelihood in raw_likelihoods_map.items():
-        if source_likelihood == 0 or source_coord not in valid_coords:
-            continue
+        for coord in coords_to_process:
+            neighbors = precomputed_neighbors.get(coord, [])
+            likelihood_at_coord = likelihoods_at_step_start.get(coord, 0.0)
+            neighbor_values = [likelihoods_at_step_start.get(n, 0.0) for n in neighbors]
             
-        # Perform graph-based diffusion from this source
-        diffused_values = _graph_diffusion_from_source(
-            source_coord, source_likelihood, world, sigma_steps, valid_coords
-        )
-        
-        # Add diffused values to the smoothed map
-        for coord, value in diffused_values.items():
-            smoothed_map[coord] += value
-    
-    return smoothed_map
+            all_vals_for_avg = [likelihood_at_coord] + neighbor_values
+            
+            # Update likelihood for current coordinate
+            current_likelihoods[coord] = np.mean(all_vals_for_avg)
+            
+    return current_likelihoods
 
 
-def _graph_diffusion_from_source(source_coord: tuple, source_likelihood: float, 
-                                world, sigma_steps: int, valid_coords: set) -> dict:
+def compute_all_graph_neighbors(world, valid_coords: list) -> dict:
     """
-    Perform graph-based diffusion from a single source coordinate.
-    Uses BFS to spread likelihood values based on graph distance.
-    
-    Args:
-        source_coord: Starting coordinate tuple
-        source_likelihood: Initial likelihood value to spread
-        world: World object with navigation graph
-        sigma_steps: Maximum number of steps to spread
-        valid_coords: Set of valid coordinates to consider
-        
+    Precomputes the connected kitchen neighbors for all valid coordinates.
+
     Returns:
-        dict: Map from coordinates to diffused likelihood values
+        dict: A dictionary where keys are coordinate tuples and values are
+              lists of their connected kitchen neighbor coordinate tuples.
     """
-    # Initialize result with source
-    diffused = {source_coord: source_likelihood}
-    
-    # BFS queue: (coord, distance_from_source)
-    queue = deque([(source_coord, 0)])
-    visited = {source_coord}
-    
-    while queue:
-        current_coord, distance = queue.popleft()
-        
-        # Stop if we've reached maximum diffusion distance
-        if distance >= sigma_steps:
-            continue
-            
-        # Get neighbors from the navigation graph
-        neighbors = _get_graph_neighbors(current_coord, world, valid_coords)
-        
-        for neighbor_coord in neighbors:
-            if neighbor_coord in visited:
-                continue
-                
-            visited.add(neighbor_coord)
-            neighbor_distance = distance + 1
-            
-            # Calculate diffusion weight based on distance
-            # Use Gaussian-like decay: stronger effect for closer nodes
-            weight = np.exp(-(neighbor_distance ** 2) / (2 * (sigma_steps / 2) ** 2))
-            diffused_likelihood = source_likelihood * weight
-            
-            # Add to diffused map
-            if neighbor_coord not in diffused:
-                diffused[neighbor_coord] = 0.0
-            diffused[neighbor_coord] += diffused_likelihood
-            
-            # Continue BFS from this neighbor
-            queue.append((neighbor_coord, neighbor_distance))
-    
-    return diffused
+    precomputed_neighbors = {}
+    for coord in valid_coords:
+        neighbors = _get_graph_neighbors(coord, world, valid_coords)
+        precomputed_neighbors[coord] = neighbors
+    return precomputed_neighbors
 
 
 def _get_graph_neighbors(coord: tuple, world, valid_coords: set) -> list:
     """
     Get valid neighboring coordinates from the navigation graph.
     
-    Args:
-        coord: Current coordinate tuple
-        world: World object with navigation graph
-        valid_coords: Set of valid coordinates to filter by
-        
     Returns:
         list: List of neighboring coordinate tuples
     """

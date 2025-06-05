@@ -1,6 +1,6 @@
 import logging
 import copy
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple
 from .graph import get_shortest_paths, get_simple_paths
 
 

@@ -43,12 +43,6 @@ def get_audio_tokens_for_path(world_state: 'World', path_coords: List) -> List[s
 def parse_raw_audio_tokens(raw_audio_tokens: List[str]) -> List:
     """
     Compress sequences of raw tokens into [num_steps_to, fridge_events, num_steps_from] format.
-    
-    Args:
-        raw_audio_tokens: List of raw tokens like ['step', 'step', 'fridge_opened', 'snack_picked_up', 'fridge_closed', 'step']
-        
-    Returns:
-        Compressed format like [2, 'fridge_opened', 'snack_picked_up', 'fridge_closed', 1]
     """
     compressed_tokens = []
     current_step_count = 0
@@ -70,13 +64,6 @@ def parse_raw_audio_tokens(raw_audio_tokens: List[str]) -> List:
 def get_compressed_audio_from_path(world_state: 'World', path_coords: List) -> List:
     """
     Convert a world coordinate path to compressed audio token sequence.
-    
-    Args:
-        world_state: World object containing environment information
-        path_coords: List of (x, y) coordinate tuples representing the path
-        
-    Returns:
-        Compressed audio sequence like [steps_to, 'fridge_opened', 'snack_picked_up', 'fridge_closed', steps_from]
     """
     raw_tokens = get_audio_tokens_for_path(world_state, path_coords)
     return parse_raw_audio_tokens(raw_tokens)
@@ -84,8 +71,8 @@ def get_compressed_audio_from_path(world_state: 'World', path_coords: List) -> L
 
 def single_segment_audio_likelihood(gt_steps: int, path_steps: int, sigma_factor: float = 0.1) -> float:
     """
-    Compute likelihood of observing path_steps given expected gt_steps.
-    Uses normalized Gaussian PDF for robustness.
+    Compute likelihood of observing path_steps given expected ground truth steps (gt_steps). 
+    Uses normalized Gaussian PDF.
     
     Args:
         gt_steps: Ground truth number of steps
@@ -110,15 +97,9 @@ def single_segment_audio_likelihood(gt_steps: int, path_steps: int, sigma_factor
 def generate_ground_truth_audio_sequences(world: 'World', config: SimulationConfig) -> List[List]:
     """
     Generate ground truth compressed audio sequences for detective predictions.
-    Only generates sequences with step counts that are actually feasible by at least one agent.
-    
-    Args:
-        world: World object containing environment and path information
-        config: Simulation configuration including step size configuration
-        
-    Returns:
-        List of sequences like [[steps_to, 'fridge_opened', 'snack_picked_up', 'fridge_closed', steps_from], ...]
+    Only generates sequences from minimum step counts from closest agent to fridge.
     """
+    from src.core.world.graph import get_shortest_path_length
     logger = logging.getLogger(__name__)
     ground_truths = []
     
@@ -134,17 +115,10 @@ def generate_ground_truth_audio_sequences(world: 'World', config: SimulationConf
     fridge_vid = node_to_vid[fridge_access_point]
     
     # Calculate shortest paths to fridge for both agents
-    # TODO: move?
-    def get_shortest_path_length(source_vid, target_vid):
-        """Get shortest path length between two vertices"""
-        path_matrix = igraph.shortest_paths(source=source_vid, target=target_vid)
-        return int(path_matrix[0][0]) if path_matrix and path_matrix[0] and path_matrix[0][0] != float('inf') else None
-
-    # Get minimum steps for each direction
-    steps_A_to_fridge = get_shortest_path_length(start_A_vid, fridge_vid)
-    steps_B_to_fridge = get_shortest_path_length(start_B_vid, fridge_vid)
-    steps_A_from_fridge = get_shortest_path_length(fridge_vid, start_A_vid)
-    steps_B_from_fridge = get_shortest_path_length(fridge_vid, start_B_vid)
+    steps_A_to_fridge = get_shortest_path_length(igraph, start_A_vid, fridge_vid)
+    steps_B_to_fridge = get_shortest_path_length(igraph, start_B_vid, fridge_vid)
+    steps_A_from_fridge = get_shortest_path_length(igraph, fridge_vid, start_A_vid)
+    steps_B_from_fridge = get_shortest_path_length(igraph, fridge_vid, start_B_vid)
     
     # Find minimum feasible steps (closest agent determines starting point)
     min_steps_to_fridge = min(s for s in [steps_A_to_fridge, steps_B_to_fridge] if s is not None)
