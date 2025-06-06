@@ -53,25 +53,22 @@ class VisualEvidenceProcessor(EvidenceProcessor):
         
         self.logger.info(f"Computing VISUAL detective predictions for {task.agent_type_being_simulated} agents")
         
-        # Get possible crumb locations
         possible_crumb_coords = task.world.get_valid_kitchen_crumb_coords()
         if not possible_crumb_coords:
             self.logger.warning("No valid crumb coordinates found")
             return PredictionResult({}, {}, {}, [])
         
-        # Calculate likelihoods for each possible crumb location
-        agent_A_data = task.sampled_data.get('A', {})
-        agent_B_data = task.sampled_data.get('B', {})
+        agent_A_path_list = task.sampled_data.get('A', [])
+        agent_B_path_list = task.sampled_data.get('B', [])
         
-        agent_A_sequences = agent_A_data.get('full_sequences', [])
-        agent_A_middle_sequences = agent_A_data.get('middle_sequences', [])
-        agent_A_plant_spots = agent_A_data.get('chosen_plant_spots', [])
+        agent_A_sequences = [p.get('full_sequence') for p in agent_A_path_list]
+        agent_A_middle_sequences = [p.get('middle_sequence') for p in agent_A_path_list]
+        agent_A_plant_spots = [p.get('chosen_plant_spot') for p in agent_A_path_list]
         
-        agent_B_sequences = agent_B_data.get('full_sequences', [])
-        agent_B_middle_sequences = agent_B_data.get('middle_sequences', [])
-        agent_B_plant_spots = agent_B_data.get('chosen_plant_spots', [])
+        agent_B_sequences = [p.get('full_sequence') for p in agent_B_path_list]
+        agent_B_middle_sequences = [p.get('middle_sequence') for p in agent_B_path_list]
+        agent_B_plant_spots = [p.get('chosen_plant_spot') for p in agent_B_path_list]
         
-        # Calculate raw likelihoods for each crumb coordinate
         raw_likelihood_map_A = {}
         raw_likelihood_map_B = {}
         
@@ -83,7 +80,8 @@ class VisualEvidenceProcessor(EvidenceProcessor):
                 agent_A_middle_sequences,
                 task.world,
                 task.agent_type_being_simulated,
-                agent_A_plant_spots
+                agent_A_plant_spots,
+                task.config.evidence
             )
             raw_likelihood_map_A[crumb_coord] = likelihood_A
             
@@ -94,7 +92,8 @@ class VisualEvidenceProcessor(EvidenceProcessor):
                 agent_B_middle_sequences,
                 task.world,
                 task.agent_type_being_simulated,
-                agent_B_plant_spots
+                agent_B_plant_spots,
+                task.config.evidence
             )
             raw_likelihood_map_B[crumb_coord] = likelihood_B
         
@@ -119,7 +118,7 @@ class VisualEvidenceProcessor(EvidenceProcessor):
                     
                     # Generate smoothing comparison plots for debugging
                     try:
-                        from src.analysis.plotting import plot_smoothing_comparison
+                        from src.analysis.plot import plot_smoothing_comparison
                         plot_smoothing_comparison(task.trial_name, task.param_log_dir, raw_likelihood_map_A, raw_likelihood_map_B, task.world, detective_sigma)
                     except ImportError:
                         self.logger.warning("Could not import plot_smoothing_comparison for debugging plots")
@@ -165,18 +164,16 @@ class AudioEvidenceProcessor(EvidenceProcessor):
         
         self.logger.info(f"Computing AUDIO detective predictions for {task.agent_type_being_simulated} agents")
         
-        # Generate ground truth audio sequences  
         gt_audio_sequences = generate_ground_truth_audio_sequences(task.world, task.config)
         if not gt_audio_sequences:
             self.logger.warning("No ground truth audio sequences generated")
             return PredictionResult({}, ([], []), ([], []), [])
         
-        # Extract agent data
-        agent_A_data = task.sampled_data.get('A', {})
-        agent_B_data = task.sampled_data.get('B', {})
+        agent_A_path_list = task.sampled_data.get('A', [])
+        agent_B_path_list = task.sampled_data.get('B', [])
         
-        agent_A_audio_sequences = agent_A_data.get('audio_sequences', [])
-        agent_B_audio_sequences = agent_B_data.get('audio_sequences', [])
+        agent_A_audio_sequences = [p.get('audio_sequence_compressed') for p in agent_A_path_list]
+        agent_B_audio_sequences = [p.get('audio_sequence_compressed') for p in agent_B_path_list]
         
         if not agent_A_audio_sequences or not agent_B_audio_sequences:
             self.logger.warning("Missing audio sequences for agents")

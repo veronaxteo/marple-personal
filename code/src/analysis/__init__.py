@@ -2,11 +2,11 @@
 Analysis module for simulation visualization and evaluation.
 
 This module provides:
-- plotting: Core plotting functionality for heatmaps and visualizations
-- evaluation: Analysis functions for path lengths and prediction evaluation
+- plot: Core plotting functionality for heatmaps and visualizations
+- evaluate: Analysis functions for path lengths and prediction evaluation
 """
 
-from .plotting import (
+from .plot import (
     plot_smoothing_comparison,
     plot_suspect_paths_heatmap,
     create_summary_plots,
@@ -15,7 +15,7 @@ from .plotting import (
     create_simulation_plots
 )
 
-from .evaluation import (
+from .evaluate import (
     extract_params_from_path,
     get_evidence_type_from_metadata,
     calculate_avg_path_lengths,

@@ -298,48 +298,6 @@ def get_noisy_plant_spot(optimal_spot: Tuple[int, int],
     return candidate_spots[selected_idx]
 
 
-# def get_noisy_plant_spot(world, optimal_spot, sigma):
-    """
-    Add noise to optimal plant spot selection. 
-    Randomly selects among neighbors based on sigma radius around optimal spot.
-    Returns a nearby valid kitchen coordinate.
-    """
-    logger = logging.getLogger(__name__)
-    
-    if sigma <= 0:
-        return optimal_spot
-    
-    try:
-        # Get neighboring coordinates within sigma radius
-        candidates = [optimal_spot]  # Include original as candidate
-        
-        x_opt, y_opt = optimal_spot
-        search_radius = max(1, int(sigma))
-        
-        for dx in range(-search_radius, search_radius + 1):
-            for dy in range(-search_radius, search_radius + 1):
-                neighbor_coord = (x_opt + dx, y_opt + dy)
-                
-                # Check if coordinate is valid and in kitchen
-                if neighbor_coord in world.world_graph.node_to_vid:
-                    vid = world.world_graph.node_to_vid[neighbor_coord]
-                    node_attrs = world.world_graph.igraph.vs[vid]
-                    is_kitchen = node_attrs['room'] == 'Kitchen'
-                    is_door = node_attrs['is_door']
-                    
-                    if is_kitchen and not is_door:
-                        candidates.append(neighbor_coord)
-        
-
-        # Select randomly from candidates
-        selected_idx = np.random.choice(len(candidates))
-        return candidates[selected_idx]
-        
-    except Exception as e:
-        logger.warning(f"Error adding noise to plant spot {optimal_spot}: {e}")
-        return optimal_spot
-
-
 # TODO: can remove this in the future
 def is_valid_audio_sequence(audio_seq) -> bool:
     """Validate that audio sequence has correct format"""

@@ -14,7 +14,7 @@ def load_or_compute_simple_path_sequences(
     
     # Determine cache file path
     cache_dir = Path(config.log_dir_base) / 'simple_paths'
-    cache_file = f'{trial_name}_simple_paths_{config.evidence.evidence_type}_{max_steps}.pkl'
+    cache_file = f'{trial_name}_simple_paths_{max_steps}.pkl'
     cache_path = cache_dir / cache_file
 
     # Try to load from cache
@@ -31,9 +31,9 @@ def load_or_compute_simple_path_sequences(
     logger.info(f"Computing simple path sequences for {trial_name} (max_steps={max_steps})")
     
     paths_A = compute_agent_path_sequences('A', world.world_graph, world.geometry, 
-                                         world.start_coords, world.mission, config.evidence.evidence_type, max_steps)
+                                         world.start_coords, world.mission, max_steps)
     paths_B = compute_agent_path_sequences('B', world.world_graph, world.geometry, 
-                                         world.start_coords, world.mission, config.evidence.evidence_type, max_steps)
+                                         world.start_coords, world.mission, max_steps)
     
     # Save results to cache
     cache_dir.mkdir(parents=True, exist_ok=True)

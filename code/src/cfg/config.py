@@ -48,6 +48,10 @@ class EvidenceConfig:
     crumb_planting_sigma: float = 1.0 
     sophisticated_detective_sigma: float = 1.0
     
+    # Visual evidence settings
+    visual_naive_likelihood_alpha: float = 0.01
+    visual_sophisticated_likelihood_alpha: float = 1.0
+    
     # Audio evidence settings
     audio_similarity_sigma: float = 0.1
     audio_gt_step_size: int = 2
@@ -72,6 +76,10 @@ class EvidenceConfig:
             raise ValueError("audio_gt_step_size must be at least 1")
         if self.visual_weight < 0 or self.visual_weight > 1:
             raise ValueError("visual_weight must be between 0 and 1")
+        if self.visual_naive_likelihood_alpha < 0:
+            raise ValueError("visual_naive_likelihood_alpha must be non-negative")
+        if self.visual_sophisticated_likelihood_alpha < 0:
+            raise ValueError("visual_sophisticated_likelihood_alpha must be non-negative")
 
 
 @dataclass

@@ -11,7 +11,7 @@ from typing import Dict, Any, Optional
 from ..cfg import SimulationConfig
 from ..sim import RSMSimulator
 from ..utils.io_utils import create_param_dir, get_json_files
-from ..analysis.plotting import create_simulation_plots
+from ..analysis.plot import create_simulation_plots
 
 
 class ExperimentRunner:

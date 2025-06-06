@@ -158,34 +158,24 @@ def get_shortest_paths(igraph_instance, source_vid: int, target_vid: int, vid_to
     """
     Finds all shortest paths between source and target in an igraph graph.
     """
-    logger = logging.getLogger(__name__)
-    try:
-        vid_paths = igraph_instance.get_all_shortest_paths(source_vid, to=target_vid, weights=None, mode='all')
-        coord_paths = []
-        for vid_path in vid_paths:
-            coord_path = [vid_to_node_map[vid] for vid in vid_path]
-            coord_paths.append(coord_path)
-        return coord_paths
-    except Exception as e:
-        logger.warning(f"No path found between VIDs {source_vid} and {target_vid} using igraph, or error: {e}")
-        return []
+    vid_paths = igraph_instance.get_all_shortest_paths(source_vid, to=target_vid, weights=None, mode='all')
+    coord_paths = []
+    for vid_path in vid_paths:
+        coord_path = [vid_to_node_map[vid] for vid in vid_path]
+        coord_paths.append(coord_path)
+    return coord_paths
 
 
 def get_simple_paths(igraph_instance, source_vid: int, target_vid: int, cutoff: int, vid_to_node_map: dict):
     """
     Finds all simple paths up to cutoff length using igraph.
     """
-    logger = logging.getLogger(__name__)
-    try:
-        vid_paths = igraph_instance.get_all_simple_paths(source_vid, to=target_vid, cutoff=cutoff, mode='all')
-        coord_paths = []
-        for vid_path in vid_paths:
-            coord_path = [vid_to_node_map[vid] for vid in vid_path]
-            coord_paths.append(coord_path)
-        return coord_paths
-    except Exception as e:
-        logger.warning(f"Error finding simple paths between vertex IDs {source_vid} and {target_vid} with cutoff {cutoff} using igraph: {e}")
-        return []
+    vid_paths = igraph_instance.get_all_simple_paths(source_vid, to=target_vid, cutoff=cutoff, mode='all')
+    coord_paths = []
+    for vid_path in vid_paths:
+        coord_path = [vid_to_node_map[vid] for vid in vid_path]
+        coord_paths.append(coord_path)
+    return coord_paths
 
 
 def get_shortest_path_length(igraph_instance, source_vid: int, target_vid: int) -> Optional[int]:

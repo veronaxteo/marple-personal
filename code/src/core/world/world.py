@@ -2,7 +2,6 @@ import json
 import logging
 import os
 
-from ...cfg import SimulationConfig
 from ...core.paths import PathSampler
 from .geometry import WorldGeometry
 from .graph import WorldGraph
@@ -18,7 +17,6 @@ class World:
         self.info = info
         self.logger = logging.getLogger(self.__class__.__name__)
         
-        # Extract basic world info
         self.width = info['width']
         self.height = info['height']
         self.mission = info['agents']['initial'][0]['cur_mission']
@@ -32,7 +30,7 @@ class World:
 
 
     def _initialize_components(self, info):
-        """Initialize all world components"""
+        """Initialize all world components."""
         self.coordinate_mapper = CoordinateMapper(self.kitchen_info)
         self.geometry = WorldGeometry(info)
         self.world_graph = WorldGraph()
@@ -43,7 +41,7 @@ class World:
 
     @staticmethod
     def initialize_world_start(filename):
-        """Initialize World from trial JSON file"""
+        """Initialize World from trial JSON file."""
         # Try multiple potential paths for the trial file
         search_paths = [
             # From src/core/world/ go up three levels to code/, then to trials/
@@ -74,33 +72,33 @@ class World:
 
     # Coordinate mapping delegation
     def world_to_kitchen_coords(self, world_x, world_y):
-        """Convert world coordinates to kitchen array coordinates"""
+        """Convert world coordinates to kitchen array coordinates."""
         return self.coordinate_mapper.world_to_kitchen_coords(world_x, world_y)
 
     def kitchen_to_world_coords(self, kitchen_x, kitchen_y):
-        """Convert kitchen array coordinates to world coordinates"""
+        """Convert kitchen array coordinates to world coordinates."""
         return self.coordinate_mapper.kitchen_to_world_coords(kitchen_x, kitchen_y)
 
     # Geometry delegation
     def is_furniture_at(self, location_tuple):
-        """Check if world coordinate is occupied by furniture"""
+        """Check if world coordinate is occupied by furniture."""
         return self.geometry.is_furniture_at(location_tuple)
 
     def get_initial_door_states(self):
-        """Get initial door states as coordinate->state mapping"""
+        """Get initial door states as coordinate --> state mapping."""
         return self.geometry.get_initial_door_states()
 
     def get_fridge_access_point(self):
-        """Get fridge access point coordinate"""
+        """Get fridge access point coordinate."""
         return self.geometry.get_fridge_access_point()
 
     def get_valid_kitchen_crumb_coords(self):
-        """Get list of valid world coordinates for crumbs in kitchen"""
+        """Get list of valid world coordinates for crumbs in kitchen."""
         return self.geometry.get_valid_kitchen_crumb_coords(self.kitchen_info, self.world_graph.node_to_vid, self.world_graph.igraph)
 
     # Graph operations
     def get_closest_door_to_agent(self, agent_id):
-        """Find closest door node to agent start position"""
+        """Find closest door node to agent start position."""
         agent_start_pos = self.start_coords.get(agent_id)
         if not agent_start_pos:
             self.logger.error(f"Start position not found for agent {agent_id}")
@@ -109,22 +107,17 @@ class World:
 
     # Subgoal and paths
     def get_subgoals(self, agent_id):
-        """Get subgoal sequence for an agent"""
+        """Get subgoal sequence for an agent."""
         return self.subgoal_planner.get_subgoals(agent_id, self.start_coords, self.mission)
 
-    def get_subgoal_simple_path_sequences(self, agent_id: str, config: SimulationConfig, 
-                                        evidence_type: str, max_steps: int = 0):
-        """Get path segments for given evidence type - delegates to utility function"""
-        
-        max_steps = max_steps if max_steps > 0 else config.sampling.max_steps
-        
+    def get_simple_path_sequences(self, agent_id: str, max_steps: int = 25):
+        """Get path segments for given evidence type."""
         return compute_agent_path_sequences(
             agent_id=agent_id,
             world_graph=self.world_graph,
             geometry=self.geometry,
             start_coords=self.start_coords,
             mission=self.mission,
-            evidence_type=evidence_type,
             max_steps=max_steps
         ) 
     

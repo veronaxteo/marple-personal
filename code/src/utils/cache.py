@@ -19,48 +19,26 @@ class PathSequenceCache:
         self.log_dir_base = log_dir_base
         self.logger = logging.getLogger(self.__class__.__name__)
     
-    def _load_from_cache(self, pickle_path: str, evidence_type_str: str, trial_name: str) -> Optional[Tuple]:
+    def _load_from_cache(self, pickle_path: str, trial_name: str) -> Optional[Tuple]:
         """
         Try to load cached path sequences.
         """
-        if not os.path.exists(pickle_path):
-            return None
-            
         try:
             with open(pickle_path, 'rb') as f:
                 cached_data = pickle.load(f)
                 
-            if not (isinstance(cached_data, dict) and 'A' in cached_data and 'B' in cached_data):
-                self.logger.warning(f"Cached {evidence_type_str} path data is not in expected dict format for {trial_name}. Recomputing.")
-                return None
-                
             paths_A_tuple = cached_data['A']
             paths_B_tuple = cached_data['B']
-            
-            # Validate 4-tuple structure
-            if not (isinstance(paths_A_tuple, tuple) and len(paths_A_tuple) == 4 and
-                   isinstance(paths_B_tuple, tuple) and len(paths_B_tuple) == 4):
-                self.logger.warning(f"Cached {evidence_type_str} path tuples have incorrect structure for {trial_name}. Recomputing.")
-                return None
                 
-            self.logger.info(f"Loaded cached {evidence_type_str} simple path sequences for {trial_name} from {pickle_path}.")
-            
-            # Log path counts for debugging
-            if evidence_type_str == 'visual':
-                self.logger.info(f"  A: P1:{len(paths_A_tuple[0])}, P2:{len(paths_A_tuple[1])}, P3:{len(paths_A_tuple[2])}")
-                self.logger.info(f"  B: P1:{len(paths_B_tuple[0])}, P2:{len(paths_B_tuple[1])}, P3:{len(paths_B_tuple[2])}")
-            elif evidence_type_str == 'audio':
-                self.logger.info(f"  A: P1(S->F):{len(paths_A_tuple[0])}, P_FS(F->S):{len(paths_A_tuple[3])}")
-                self.logger.info(f"  B: P1(S->F):{len(paths_B_tuple[0])}, P_FS(F->S):{len(paths_B_tuple[3])}")
+            self.logger.info(f"Loaded cached simple path sequences for {trial_name} from {pickle_path}.")
                 
             return paths_A_tuple, paths_B_tuple
             
         except Exception as e:
-            self.logger.warning(f"Error loading cached {evidence_type_str} paths for {trial_name}: {e}. Recomputing.")
+            self.logger.warning(f"Error loading cached paths for {trial_name}: {e}. Recomputing.")
             return None
     
-    def _save_to_cache(self, pickle_path: str, paths_A_tuple: Tuple, paths_B_tuple: Tuple, 
-                      evidence_type_str: str, trial_name: str) -> None:
+    def _save_to_cache(self, pickle_path: str, paths_A_tuple: Tuple, paths_B_tuple: Tuple, trial_name: str) -> None:
         """
         Save computed path sequences to cache.
         """
@@ -69,9 +47,9 @@ class PathSequenceCache:
             cached_data = {'A': paths_A_tuple, 'B': paths_B_tuple}
             with open(pickle_path, 'wb') as f:
                 pickle.dump(cached_data, f)
-            self.logger.info(f"Cached {evidence_type_str} simple path sequences for {trial_name} to {pickle_path}")
+            self.logger.info(f"Cached simple path sequences for {trial_name} to {pickle_path}")
         except Exception as e:
-            self.logger.error(f"Failed to cache {evidence_type_str} paths for {trial_name}: {e}")
+            self.logger.error(f"Failed to cache paths for {trial_name}: {e}")
 
 
 class SimulationDataCache:

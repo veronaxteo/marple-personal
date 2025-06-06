@@ -66,52 +66,25 @@ def save_sampled_paths_to_csv(sampled_data, trial_name, param_log_dir, agent_typ
     paths_data_to_save = []
 
     for agent in ['A', 'B']:
-        agent_data = sampled_data.get(agent)
-        if not agent_data:
+        agent_path_list = sampled_data.get(agent)
+        if not agent_path_list:
             logger.warning(f"No data for agent {agent} ({agent_type}) in {trial_name}.")
             continue
 
-        full_sequences = agent_data.get('full_sequences', [])
-        middle_sequences = agent_data.get('middle_sequences', [])
-        chosen_plant_spots = agent_data.get('chosen_plant_spots', [])
-        numbered_arrays = agent_data.get('numbered_arrays', [])
-        audio_sequences = agent_data.get('audio_sequences', [])
-        to_fridge_sequences = agent_data.get('to_fridge_sequences', [])
-        full_sequence_lengths = agent_data.get('full_sequence_lengths', [])
-        to_fridge_sequence_lengths = agent_data.get('to_fridge_sequence_lengths', [])
-        middle_sequence_lengths = agent_data.get('middle_sequence_lengths', [])
-
-        num_records = len(numbered_arrays) if numbered_arrays else len(full_sequences)
-        if num_records == 0:
-            logger.warning(f"No sequences or numbered_arrays to save for agent {agent} ({agent_type}) in {trial_name}.")
-            continue
-
-        for i in range(num_records):
-            path_str = "N/A"
-            if i < len(numbered_arrays) and numbered_arrays[i] is not None:
-                path_str = '\n'.join([' '.join(map(str, row)) for row in numbered_arrays[i]])
-            
-            plant_spot_str = "N/A"
-            if agent_type == 'sophisticated' and i < len(chosen_plant_spots) and chosen_plant_spots[i] is not None:
-                plant_spot_str = str(chosen_plant_spots[i])
-            
-            audio_seq_str = "N/A"
-            if i < len(audio_sequences) and audio_sequences[i] is not None:
-                audio_seq_str = str(audio_sequences[i])
-
+        for path_data in agent_path_list:
             paths_data_to_save.append({
                 'trial': trial_name,
                 'agent': agent,
                 'agent_type': agent_type,
-                'path_grid': path_str,
-                'full_sequence': str(full_sequences[i]) if i < len(full_sequences) else "N/A",
-                'middle_sequence': str(middle_sequences[i]) if i < len(middle_sequences) else "N/A",
-                'to_fridge_sequence': str(to_fridge_sequences[i]) if i < len(to_fridge_sequences) else "N/A",
-                'chosen_plant_spot': plant_spot_str,
-                'audio_sequence_compressed': audio_seq_str,
-                'full_sequence_length': full_sequence_lengths[i] if i < len(full_sequence_lengths) else -1,
-                'to_fridge_sequence_length': to_fridge_sequence_lengths[i] if i < len(to_fridge_sequence_lengths) else -1,
-                'middle_sequence_length': middle_sequence_lengths[i] if i < len(middle_sequence_lengths) else -1
+                'path_grid': "N/A",  # path_str logic removed for simplicity
+                'full_sequence': str(path_data.get('full_sequence', [])),
+                'middle_sequence': str(path_data.get('middle_sequence', [])),
+                'to_fridge_sequence': str(path_data.get('to_fridge_sequence', [])),
+                'chosen_plant_spot': str(path_data.get('chosen_plant_spot')) if agent_type == 'sophisticated' else "N/A",
+                'audio_sequence_compressed': "N/A", # audio_seq_str logic removed
+                'full_sequence_length': path_data.get('full_sequence_length', -1),
+                'to_fridge_sequence_length': path_data.get('to_fridge_sequence_length', -1),
+                'middle_sequence_length': path_data.get('middle_sequence_length', -1)
             })
 
     df = pd.DataFrame(paths_data_to_save)

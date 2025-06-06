@@ -19,7 +19,7 @@ from dataclasses import asdict
 from ..utils.io_utils import get_json_files, create_param_dir
 from ..cfg import SimulationConfig, SamplingConfig, EvidenceConfig
 from ..sim import RSMSimulator, EmpiricalSimulator, UniformSimulator
-from ..analysis.plotting import create_simulation_plots
+from ..analysis.plot import create_simulation_plots
 
 
 def setup_logging(log_dir, log_file=None):
@@ -57,31 +57,46 @@ def save_metadata(config, param_log_dir):
     metadata_filepath = os.path.join(param_log_dir, 'metadata.json')
     
     # Convert config to dictionary
-    cfg_dict_for_metadata = asdict(config)
+    cfg_dict = asdict(config)
+
+    # Clean up parameters based on evidence type
+    evidence_type = cfg_dict.get('evidence', {}).get('evidence_type')
     
-    # Remove large fields that would make the file unnecessarily big
-    cfg_dict_for_metadata.pop('naive_A_visual_likelihoods_map', None)
-    cfg_dict_for_metadata.pop('naive_B_visual_likelihoods_map', None)
-    cfg_dict_for_metadata.pop('naive_A_to_fridge_steps_model', None)
-    cfg_dict_for_metadata.pop('naive_A_from_fridge_steps_model', None)
-    cfg_dict_for_metadata.pop('naive_B_to_fridge_steps_model', None)
-    cfg_dict_for_metadata.pop('naive_B_from_fridge_steps_model', None)
-    
-    # Remove any other large data structures if they exist
-    if 'evidence' in cfg_dict_for_metadata:
-        evidence_dict = cfg_dict_for_metadata['evidence']
-        evidence_dict.pop('naive_A_visual_likelihoods_map', None)
-        evidence_dict.pop('naive_B_visual_likelihoods_map', None)
-        evidence_dict.pop('naive_A_to_fridge_steps_model', None)
-        evidence_dict.pop('naive_A_from_fridge_steps_model', None)
-        evidence_dict.pop('naive_B_to_fridge_steps_model', None)
-        evidence_dict.pop('naive_B_from_fridge_steps_model', None)
-    
+    if 'evidence' in cfg_dict:
+        evidence_dict = cfg_dict['evidence']
+        
+        # Always remove these large fields
+        large_fields = [
+            'naive_A_visual_likelihoods_map', 'naive_B_visual_likelihoods_map',
+            'naive_A_to_fridge_steps_model', 'naive_A_from_fridge_steps_model',
+            'naive_B_to_fridge_steps_model', 'naive_B_from_fridge_steps_model'
+        ]
+        for field in large_fields:
+            evidence_dict.pop(field, None)
+            
+        if evidence_type == 'visual':
+            # Remove audio and multimodal params
+            audio_params = ['audio_similarity_sigma', 'audio_gt_step_size']
+            multimodal_params = ['visual_weight']
+            for param in audio_params + multimodal_params:
+                evidence_dict.pop(param, None)
+                
+        elif evidence_type == 'audio':
+            # Remove visual and multimodal params
+            visual_params = [
+                'naive_detective_sigma', 'crumb_planting_sigma', 
+                'sophisticated_detective_sigma',
+                'visual_naive_likelihood_alpha', 'visual_sophisticated_likelihood_alpha'
+            ]
+            multimodal_params = ['visual_weight']
+            for param in visual_params + multimodal_params:
+                evidence_dict.pop(param, None)
+
     # Add timestamp
-    cfg_dict_for_metadata['simulation_timestamp'] = datetime.datetime.now().isoformat()
+    cfg_dict['simulation_timestamp'] = datetime.datetime.now().isoformat()
     
     with open(metadata_filepath, 'w') as f_meta:
-        json.dump(cfg_dict_for_metadata, f_meta, indent=4)
+        json.dump(cfg_dict, f_meta, indent=4)
     
     logger = logging.getLogger(__name__)
     logger.info(f"Saved metadata to {metadata_filepath}")

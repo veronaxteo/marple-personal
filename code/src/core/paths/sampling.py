@@ -43,9 +43,9 @@ class PathSampler:
         self.audio_framing_cache = {}
         self.world = world
     
+
     def sample_paths(self, task: PathSamplingTask) -> Dict:
         """Main entry point for path sampling."""
-        
         if task.config.evidence.evidence_type == 'visual':
             return self._sample_visual_paths(task)
         elif task.config.evidence.evidence_type == 'audio':
@@ -53,6 +53,7 @@ class PathSampler:
         else:
             raise ValueError(f"Unsupported evidence type: {task.config.evidence.evidence_type}")
     
+
     def _sample_visual_paths(self, task: PathSamplingTask) -> Dict:
         """Sample paths for visual evidence."""
         
@@ -112,6 +113,7 @@ class PathSampler:
         
         return result.__dict__
     
+
     def _sample_audio_paths(self, task: PathSamplingTask) -> Dict:
         """Sample paths for audio evidence."""
         
@@ -165,6 +167,7 @@ class PathSampler:
         
         return result.__dict__
     
+
     def _calculate_visual_utilities(
         self,
         task: PathSamplingTask,

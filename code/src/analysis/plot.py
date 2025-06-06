@@ -25,6 +25,10 @@ def plot_smoothing_comparison(trial_name: str, param_log_dir: str, raw_likelihoo
     """
     logger = logging.getLogger(__name__)
     
+    # Create plots dir
+    plots_dir = os.path.join(param_log_dir, 'plots')
+    os.makedirs(plots_dir, exist_ok=True)
+    
     # Apply both smoothing methods
     sigma_steps = max(1, int(sigma_value))
     
@@ -39,18 +43,18 @@ def plot_smoothing_comparison(trial_name: str, param_log_dir: str, raw_likelihoo
     
     # Create comparison plots for Agent A
     _create_smoothing_comparison_plot(
-        trial_name, param_log_dir, raw_likelihood_map_A, old_smoothed_A, new_smoothed_A, 
+        trial_name, plots_dir, raw_likelihood_map_A, old_smoothed_A, new_smoothed_A, 
         world, "A", sigma_value, logger
     )
     
     # Create comparison plots for Agent B  
     _create_smoothing_comparison_plot(
-        trial_name, param_log_dir, raw_likelihood_map_B, old_smoothed_B, new_smoothed_B,
+        trial_name, plots_dir, raw_likelihood_map_B, old_smoothed_B, new_smoothed_B,
         world, "B", sigma_value, logger
     )
 
 
-def _create_smoothing_comparison_plot(trial_name: str, param_log_dir: str, raw_map: Dict, 
+def _create_smoothing_comparison_plot(trial_name: str, plots_dir: str, raw_map: Dict, 
                                     old_smoothed: Dict, new_smoothed: Dict, world: World, 
                                     agent_id: str, sigma_value: float, logger):
     """Helper function to create a single smoothing comparison plot"""
@@ -101,8 +105,8 @@ def _create_smoothing_comparison_plot(trial_name: str, param_log_dir: str, raw_m
     plt.suptitle(f"Smoothing Comparison - Trial: {trial_name}, Agent {agent_id}", fontsize=16)
     plt.tight_layout()
     
-    # Save plot
-    comparison_filename = os.path.join(param_log_dir, f"smoothing_comparison_agent_{agent_id}_{trial_name}.png")
+    # Save plot in plots dir
+    comparison_filename = os.path.join(plots_dir, f"smoothing_comparison_agent_{agent_id}_{trial_name}.png")
     plt.savefig(comparison_filename, dpi=150, bbox_inches='tight')
     logger.info(f"Saved smoothing comparison plot for Agent {agent_id} to {comparison_filename}")
     plt.close()
@@ -121,6 +125,10 @@ def plot_suspect_paths_heatmap(trial_name: str, param_log_dir: str, agent_type_t
         path_segment_type: Path segment ('to_fridge', 'return_from_fridge')
     """
     logger = logging.getLogger(__name__)
+
+    # Create plots dir
+    plots_dir = os.path.join(param_log_dir, 'plots')
+    os.makedirs(plots_dir, exist_ok=True)
 
     trial_file_name = f"{trial_name}_A1.json"
     world = World.initialize_world_start(trial_file_name)
@@ -146,7 +154,7 @@ def plot_suspect_paths_heatmap(trial_name: str, param_log_dir: str, agent_type_t
             path_column_name = 'middle_sequence'  # From fridge to door
             plot_title_segment = "Path from Fridge to Door Tile Counts"
         elif evidence_type == 'visual':
-            path_column_name = 'full_sequence'  # Will slice from fridge
+            path_column_name = 'full_sequence'
             plot_title_segment = "Return Path Tile Counts (from Fridge)"
     else:
         path_column_name = 'full_sequence'
@@ -218,8 +226,8 @@ def plot_suspect_paths_heatmap(trial_name: str, param_log_dir: str, agent_type_t
         plt.xlabel("World X")
         plt.ylabel("World Y")
         
-        # Save plot
-        plot_filename = os.path.join(param_log_dir, 
+        # Save plot in plots directory
+        plot_filename = os.path.join(plots_dir, 
                                    f"heatmap_{evidence_type}_{path_segment_type}_agent_{agent_id}_{trial_name}_{agent_type_to_plot}.png")
         plt.savefig(plot_filename, dpi=150, bbox_inches='tight')
         logger.info(f"Saved heatmap for Agent {agent_id} to {plot_filename}")
@@ -259,6 +267,10 @@ def create_summary_plots(param_log_dir: str, trial_name: str):
 def plot_detective_predictions_heatmap(trial_name: str, param_log_dir: str, detective_agent_type: str, evidence_type: str = 'visual'):
     """Plot detective predictions as a heatmap showing slider values (-50 to +50)"""
     logger = logging.getLogger(__name__)
+
+    # Create plots directory if it doesn't exist
+    plots_dir = os.path.join(param_log_dir, 'plots')
+    os.makedirs(plots_dir, exist_ok=True)
 
     if evidence_type == 'audio':
         # For audio evidence, use the specialized sequence length heatmap
@@ -321,7 +333,8 @@ def plot_detective_predictions_heatmap(trial_name: str, param_log_dir: str, dete
     plt.xticks(ticks=np.arange(0.5, plot_width, 1), labels=np.arange(1, plot_width + 1))
     plt.yticks(ticks=np.arange(0.5, plot_height, 1), labels=np.arange(plot_height, 0, -1))
     
-    heatmap_filename = os.path.join(param_log_dir, f"detective_preds_heatmap_{detective_agent_type}_{evidence_type}_{trial_name}.png")
+    # Save plot in plots directory
+    heatmap_filename = os.path.join(plots_dir, f"detective_preds_heatmap_{detective_agent_type}_{evidence_type}_{trial_name}.png")
     plt.savefig(heatmap_filename, dpi=150, bbox_inches='tight')
     logger.info(f"Saved detective predictions heatmap to {heatmap_filename}")
     plt.close()
@@ -330,6 +343,10 @@ def plot_detective_predictions_heatmap(trial_name: str, param_log_dir: str, dete
 def plot_detective_audio_predictions_heatmap(trial_name: str, param_log_dir: str, detective_agent_type: str):
     """Plot audio detective predictions as a heatmap based on sequence lengths to/from fridge"""
     logger = logging.getLogger(__name__)
+    
+    # Create plots directory if it doesn't exist
+    plots_dir = os.path.join(param_log_dir, 'plots')
+    os.makedirs(plots_dir, exist_ok=True)
     
     # Load prediction data
     predictions_file = os.path.join(param_log_dir, f"{trial_name}_{detective_agent_type}_audio_predictions.json")
@@ -411,8 +428,8 @@ def plot_detective_audio_predictions_heatmap(trial_name: str, param_log_dir: str
     cbar = plt.gca().collections[0].colorbar
     cbar.set_label('Detective Prediction (-50: A, +50: B)', rotation=270, labelpad=20)
     
-    # Save plot
-    heatmap_filename = os.path.join(param_log_dir, f"detective_audio_preds_heatmap_{detective_agent_type}_{trial_name}.png")
+    # Save plot in plots directory
+    heatmap_filename = os.path.join(plots_dir, f"detective_audio_preds_heatmap_{detective_agent_type}_{trial_name}.png")
     plt.savefig(heatmap_filename, dpi=150, bbox_inches='tight')
     logger.info(f"Saved audio detective predictions heatmap to {heatmap_filename}")
     plt.close()
@@ -421,6 +438,10 @@ def plot_detective_audio_predictions_heatmap(trial_name: str, param_log_dir: str
 def plot_suspect_crumb_planting_heatmap(trial_name: str, param_log_dir: str):
     """Plot sophisticated suspect crumb planting locations"""
     logger = logging.getLogger(__name__)
+    
+    # Create plots directory if it doesn't exist
+    plots_dir = os.path.join(param_log_dir, 'plots')
+    os.makedirs(plots_dir, exist_ok=True)
     
     # Load sophisticated paths CSV
     csv_file_path = os.path.join(param_log_dir, f"{trial_name}_sampled_paths_sophisticated.csv")
@@ -477,7 +498,8 @@ def plot_suspect_crumb_planting_heatmap(trial_name: str, param_log_dir: str):
         plt.xlabel("World X")
         plt.ylabel("World Y")
         
-        plot_filename = os.path.join(param_log_dir, f"crumb_planting_heatmap_agent_{agent_id}_{trial_name}.png")
+        # Save plot in plots directory
+        plot_filename = os.path.join(plots_dir, f"crumb_planting_heatmap_agent_{agent_id}_{trial_name}.png")
         plt.savefig(plot_filename, dpi=150, bbox_inches='tight')
         logger.info(f"Saved crumb planting heatmap for Agent {agent_id} to {plot_filename}")
         plt.close()

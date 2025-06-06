@@ -9,16 +9,9 @@ This module provides:
 
 from .sampling import PathSampler, SamplingResult
 from .utilities import (
-    calculate_audio_utilities,
-    calculate_single_audio_utility,
-    compute_audio_framing_likelihoods,
     group_paths_by_length,
-    sample_paths_with_lengths,
     utilities_to_probabilities,
     rescale_costs,
-    calculate_optimal_plant_spot_and_slider,
-    get_noisy_plant_spot,
-    is_valid_audio_sequence
 )
 
 __all__ = [
@@ -27,14 +20,7 @@ __all__ = [
     'SamplingResult',
     
     # Utility functions
-    'calculate_audio_utilities',
-    'calculate_single_audio_utility',
-    'compute_audio_framing_likelihoods',
     'group_paths_by_length',
-    'sample_paths_with_lengths',
     'utilities_to_probabilities',
-    'rescale_costs',
-    'calculate_optimal_plant_spot_and_slider',
-    'get_noisy_plant_spot',
-    'is_valid_audio_sequence'
+    'rescale_costs'
 ] 

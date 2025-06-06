@@ -7,6 +7,7 @@ for both naive (random) and sophisticated (strategic) agents.
 
 import logging
 from typing import List, Tuple, Optional
+from src.cfg.config import EvidenceConfig
 
 
 def get_visual_evidence_likelihood(crumb_coord_tuple: Tuple[int, int], 
@@ -14,7 +15,8 @@ def get_visual_evidence_likelihood(crumb_coord_tuple: Tuple[int, int],
                                  agent_middle_sequences: List,
                                  world_state: 'World', 
                                  agent_type_being_simulated: str = 'naive',
-                                 chosen_plant_spots_for_sequences: Optional[List] = None) -> float:
+                                 chosen_plant_spots_for_sequences: Optional[List] = None,
+                                 evidence_config: Optional[EvidenceConfig] = None) -> float:
     """
     Calculate likelihood of observing a crumb at given a given kitchen coordinate.
     Handles both naive (random crumb dropping) and sophisticated (strategic planting) agents.
@@ -26,6 +28,7 @@ def get_visual_evidence_likelihood(crumb_coord_tuple: Tuple[int, int],
         world_state: World object containing environment information
         agent_type_being_simulated: 'naive' or 'sophisticated'
         chosen_plant_spots_for_sequences: List of deliberately chosen plant spots for sophisticated agents
+        evidence_config: EvidenceConfig object with likelihood parameters
         
     Returns:
         Float likelihood value between 0 and 1
@@ -109,7 +112,15 @@ def get_visual_evidence_likelihood(crumb_coord_tuple: Tuple[int, int],
     # laplace-like smoothing (not exactly because we're not adding a pseudo-count to the counts)
     # smaller alpha for naive because weighted probabilities on smaller scale
     # regular laplace smoothing for sophisticated, alpha=1.0 default
-    alpha = 0.01 if agent_type_being_simulated == 'naive' else 1.0
+    if evidence_config:
+        if agent_type_being_simulated == 'naive':
+            alpha = evidence_config.visual_naive_likelihood_alpha
+        else:
+            alpha = evidence_config.visual_sophisticated_likelihood_alpha
+    else:
+        logger.warning("EvidenceConfig not provided, using default alpha values.")
+        alpha = 0.01 if agent_type_being_simulated == 'naive' else 1.0
+        
     final_likelihood = (weighted_visit_count + alpha) / (num_sequences + alpha * num_possible_crumbs)
 
     return final_likelihood 
