@@ -7,7 +7,7 @@ and agent behaviors (naive, sophisticated).
 
 import numpy as np
 import logging
-from typing import Dict, List, Tuple
+from typing import Dict, List
 from dataclasses import dataclass
 
 from src.core.evidence import get_compressed_audio_from_path
@@ -15,10 +15,13 @@ from src.cfg import PathSamplingTask
 from .utilities import (
     calculate_audio_utilities,
     calculate_visual_utilities,
+    calculate_multimodal_utilities,
     utilities_to_probabilities,
     get_noisy_plant_spot,
-    rescale_costs,
-    group_paths_by_length
+    group_paths_by_length,
+    calculate_length_based_probabilities,
+    calculate_to_fridge_utilities,
+    calculate_from_fridge_utilities
 )
 
 
@@ -49,6 +52,8 @@ class PathSampler:
             return self._sample_visual_paths(task)
         elif task.config.evidence.evidence_type == 'audio':
             return self._sample_audio_paths(task)
+        elif task.config.evidence.evidence_type == 'multimodal':
+            return self._sample_multimodal_paths(task)
         else:
             raise ValueError(f"Unsupported evidence type: {task.config.evidence.evidence_type}")
 
@@ -59,34 +64,25 @@ class PathSampler:
         result = SamplingResult([], [], [], [], [], [], [], [], [], [])
         
         if task.agent_type == 'sophisticated':
-            # Probability calculation for strategic path (fridge to door)
+            # Probability for strategic path (fridge to door) is based on visual utility
             utilities_strategic, optimal_plant_spots = calculate_visual_utilities(task, p_fridge_door)
             probs_fridge_to_door = utilities_to_probabilities(utilities_strategic, task)
 
-            # Length-based probabilities for all other non-strategic segments
-            costs_start_door = np.array([len(p) - 1 for p in p_start_door])
-            probs_start_door = utilities_to_probabilities(1.0 - rescale_costs(costs_start_door), task)
-            
-            costs_door_fridge = np.array([len(p) - 1 for p in p_door_fridge])
-            probs_door_fridge = utilities_to_probabilities(1.0 - rescale_costs(costs_door_fridge), task)
-
-            costs_door_start = np.array([len(p) - 1 for p in p_door_start])
-            probs_door_start = utilities_to_probabilities(1.0 - rescale_costs(costs_door_start), task)
+            # Probabilities for all other non-strategic segments are based on path length
+            probs_start_door = calculate_length_based_probabilities(p_start_door, task)
+            probs_door_fridge = calculate_length_based_probabilities(p_door_fridge, task)
+            probs_door_start = calculate_length_based_probabilities(p_door_start, task)
 
         elif task.agent_type == 'naive':
             # For naive, calculate probabilities for the full composite paths based on length
             paths_to_fridge = [p1[:-1] + p2 for p1 in p_start_door for p2 in p_door_fridge]
-            paths_from_fridge = [p3[:-1] + p4 for p3 in p_fridge_door for p4 in p_door_start]
-
-            costs_to = np.array([len(p) - 1 for p in paths_to_fridge])
-            probs_to_fridge = utilities_to_probabilities(1.0 - rescale_costs(costs_to), task)
+            probs_to_fridge = calculate_length_based_probabilities(paths_to_fridge, task)
             
-            costs_from = np.array([len(p) - 1 for p in paths_from_fridge])
-            probs_from_fridge = utilities_to_probabilities(1.0 - rescale_costs(costs_from), task)
+            paths_from_fridge = [p3[:-1] + p4 for p3 in p_fridge_door for p4 in p_door_start]
+            probs_from_fridge = calculate_length_based_probabilities(paths_from_fridge, task)
             
         # Path sampling
         for _ in range(task.num_sample_paths):
-            
             if task.agent_type == 'naive':
                 idx_to = np.random.choice(len(paths_to_fridge), p=probs_to_fridge)
                 to_fridge_sequence = paths_to_fridge[idx_to]
@@ -124,6 +120,7 @@ class PathSampler:
             if task.agent_type == 'sophisticated':
                 if optimal_plant_spots[idx_fridge_to_door] is not None:
                     optimal_spot = optimal_plant_spots[idx_fridge_to_door]
+                    # Plant crumb
                     if task.config.evidence.crumb_planting_sigma > 0:
                         chosen_plant_spot = get_noisy_plant_spot(optimal_spot, task.config.evidence.crumb_planting_sigma, set(self.world.get_valid_kitchen_crumb_coords()))
                     else:
@@ -192,3 +189,71 @@ class PathSampler:
             
         return result.__dict__
 
+    def _sample_multimodal_paths(self, task: PathSamplingTask) -> Dict:
+        """Samples paths for multimodal evidence scenarios."""
+        p_start_door, p_door_fridge, \
+        p_fridge_door, p_door_start = task.simple_path_sequences
+
+        result = SamplingResult([], [], [], [], [], [], [], [], [], [])
+        
+        paths_to_fridge = [p1[:-1] + p2 for p1 in p_start_door for p2 in p_door_fridge]
+        paths_from_fridge = [p3[:-1] + p4 for p3 in p_fridge_door for p4 in p_door_start]
+
+        if task.agent_type == 'naive':
+            probs_to_fridge = calculate_length_based_probabilities(paths_to_fridge, task)
+            probs_from_fridge = calculate_length_based_probabilities(paths_from_fridge, task)
+
+        elif task.agent_type == 'sophisticated':
+            # Calculate probabilities for each leg of the journey independently            
+            # Utilities and probabilities for path to the fridge
+            utilities_to = calculate_to_fridge_utilities(task, paths_to_fridge)
+            probs_to_fridge = utilities_to_probabilities(utilities_to, task)
+
+            # Utilities and probabilities for path from the fridge
+            utilities_from, optimal_spots_from = calculate_from_fridge_utilities(task, paths_from_fridge)
+            probs_from_fridge = utilities_to_probabilities(utilities_from, task)
+
+        # Path sampling
+        for _ in range(task.num_sample_paths):
+            chosen_plant_spot = None
+            if task.agent_type == 'naive':
+                idx_to = np.random.choice(len(paths_to_fridge), p=probs_to_fridge)
+                to_fridge_sequence = paths_to_fridge[idx_to]
+
+                idx_from = np.random.choice(len(paths_from_fridge), p=probs_from_fridge)
+                return_sequence = paths_from_fridge[idx_from]
+            
+            elif task.agent_type == 'sophisticated':
+                # Sample each leg independently
+                idx_to = np.random.choice(len(paths_to_fridge), p=probs_to_fridge)
+                to_fridge_sequence = paths_to_fridge[idx_to]
+
+                idx_from = np.random.choice(len(paths_from_fridge), p=probs_from_fridge)
+                return_sequence = paths_from_fridge[idx_from]
+                
+                optimal_spot = optimal_spots_from[idx_from]
+                if optimal_spot is not None:
+                    if task.config.evidence.crumb_planting_sigma > 0:
+                        chosen_plant_spot = get_noisy_plant_spot(optimal_spot, task.config.evidence.crumb_planting_sigma, set(self.world.get_valid_kitchen_crumb_coords()))
+                    else:
+                        chosen_plant_spot = optimal_spot
+
+            # Assemble and save the results
+            full_sequence = to_fridge_sequence[:-1] + return_sequence
+            seg_fridge_door = next(p for p in p_fridge_door if tuple(return_sequence[:len(p)]) == tuple(p))
+            compressed_audio = get_compressed_audio_from_path(task.world, full_sequence)
+            
+            result.full_sequences.append(full_sequence)
+            result.to_fridge_sequences.append(to_fridge_sequence)
+            result.return_sequences.append(return_sequence)
+            result.middle_sequences.append(seg_fridge_door)
+            result.audio_sequences.append(compressed_audio)
+            result.chosen_plant_spots.append(chosen_plant_spot)
+            
+            result.full_sequence_lengths.append(len(full_sequence) - 1)
+            result.to_fridge_sequence_lengths.append(len(to_fridge_sequence) - 1)
+            result.return_sequence_lengths.append(len(return_sequence) - 1)
+            result.middle_sequence_lengths.append(len(seg_fridge_door) - 1)
+            
+        return result.__dict__
+    

@@ -77,8 +77,7 @@ def save_metadata(config, param_log_dir):
         if evidence_type == 'visual':
             # Remove audio and multimodal params
             audio_params = ['audio_similarity_sigma', 'audio_gt_step_size']
-            multimodal_params = ['visual_weight']
-            for param in audio_params + multimodal_params:
+            for param in audio_params:
                 evidence_dict.pop(param, None)
                 
         elif evidence_type == 'audio':
@@ -88,8 +87,7 @@ def save_metadata(config, param_log_dir):
                 'sophisticated_detective_sigma',
                 'visual_naive_likelihood_alpha', 'visual_sophisticated_likelihood_alpha'
             ]
-            multimodal_params = ['visual_weight']
-            for param in visual_params + multimodal_params:
+            for param in visual_params:
                 evidence_dict.pop(param, None)
 
     # Add timestamp
@@ -177,7 +175,6 @@ def create_config_from_args(args):
         if args.evidence == 'audio':
             defaults['evidence']['audio_similarity_sigma'] = 0.1
         elif args.evidence == 'multimodal':
-            defaults['evidence']['visual_weight'] = 0.5
             defaults['evidence']['audio_similarity_sigma'] = 0.1
         
         # Create config from modified defaults

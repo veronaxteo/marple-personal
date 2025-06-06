@@ -1,4 +1,4 @@
-# Default config parameters
+# Default multimodal config parameters
 
 # Sampling
 sampling:
@@ -12,18 +12,17 @@ sampling:
 
 # Evidence
 evidence:
-  naive_detective_sigma: 2.0 
-  crumb_planting_sigma: 2.0 
-  sophisticated_detective_sigma: 2.0
-  
-  # Audio
+  naive_detective_sigma: 1.0 
+  crumb_planting_sigma: 1.0 
+  sophisticated_detective_sigma: 1.0
+  visual_naive_likelihood_alpha: 0.01
+  visual_sophisticated_likelihood_alpha: 1.0
   audio_similarity_sigma: 0.1
-  audio_gt_step_size: 2
+  audio_gt_step_size: 5
 
 # Simulation
 simulation:
   log_dir: "../../results"
-
-# TODO: move to under simulation?
+  
 default_trial: "snack1"
 default_evidence: "visual"

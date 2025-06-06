@@ -5,13 +5,11 @@ Handles detective reasoning for both naive and sophisticated suspect models
 using visual, audio, or multimodal evidence.
 """
 
-import logging
 from typing import Dict, Any
 
 from .base import Agent
 from ..cfg import SimulationConfig, DetectiveTaskConfig
-from ..utils.evidence_utils import create_evidence_processor
-
+from ..utils.evidence_utils import get_evidence_processor
 
 class Detective(Agent):
     """
@@ -49,7 +47,7 @@ class Detective(Agent):
         )
         
         # Create appropriate evidence processor
-        evidence_processor = create_evidence_processor(self.config.evidence.evidence_type)
+        evidence_processor = get_evidence_processor(self.config)
         
         # Compute predictions
         result = evidence_processor.compute_detective_predictions(task)

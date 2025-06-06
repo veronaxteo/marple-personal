@@ -15,7 +15,7 @@ from src.cfg import SimulationConfig, PathSamplingTask
 
 
 def calculate_visual_utilities(task: PathSamplingTask, sequences_p2: List) -> Tuple[np.ndarray, List]:
-    """Calculate utilities for visual path segments (P2: Fridge->Door)."""
+    """Calculate utilities for visual path segments (Fridge --> Door)."""
     middle_path_lengths = np.array([len(seq) for seq in sequences_p2])
     
     min_len = np.min(middle_path_lengths) if len(middle_path_lengths) > 0 else 0
@@ -49,17 +49,6 @@ def calculate_visual_utilities(task: PathSamplingTask, sequences_p2: List) -> Tu
         utilities = [1.0 - l for l in rescaled_lengths]
     
     return np.array(utilities), optimal_plant_spots
-
-
-def group_paths_by_length(paths: List) -> Dict[int, List]:
-    """Groups a list of paths by their length."""
-    paths_by_len = {}
-    for path in paths:
-        length = len(path) - 1 if path else 0
-        if length not in paths_by_len:
-            paths_by_len[length] = []
-        paths_by_len[length].append(path)
-    return paths_by_len
 
 
 def calculate_audio_utilities(
@@ -99,6 +88,184 @@ def calculate_audio_utilities(
     
     probabilities = utilities_to_probabilities(np.array(utilities), task)
     return length_pair_metadata, probabilities
+
+
+def calculate_multimodal_utilities(
+    task: PathSamplingTask,
+    paths_to_fridge: List,
+    paths_from_fridge: List
+) -> Tuple[np.ndarray, List, List]:
+    """Calculate utilities for multimodal path pairs for sophisticated agents."""
+    logger = logging.getLogger(__name__)
+    path_pairs = [(p_to, p_from) for p_to in paths_to_fridge for p_from in paths_from_fridge]
+    
+    if not path_pairs:
+        return np.array([]), [], []
+
+    # Caching
+    audio_cache = {}
+    visual_cache = {}
+
+    _, _, p_fridge_door, _ = task.simple_path_sequences
+    fridge_access_point = task.world.get_fridge_access_point()
+    naive_A_map = getattr(task.config.evidence, 'naive_A_visual_likelihoods_map', {})
+    naive_B_map = getattr(task.config.evidence, 'naive_B_visual_likelihoods_map', {})
+
+    # Calculate costs and framing metrics for all path pairs
+    all_costs = []
+    all_framing_metrics = []
+    all_optimal_spots = []
+
+    for p_to, p_from in path_pairs:
+        # Cost factor
+        cost = (len(p_to) - 1) + (len(p_from) - 1)
+        all_costs.append(cost)
+
+        # Get audio likelihoods, using cache if available
+        len_pair_key = (len(p_to) - 1, len(p_from) - 1)
+        if len_pair_key not in audio_cache:
+            audio_cache[len_pair_key] = compute_audio_framing_likelihoods(
+                len_pair_key[0], len_pair_key[1], task.config
+            )
+        likelihood_A_audio, likelihood_B_audio = audio_cache[len_pair_key]
+
+        # Get visual likelihoods, using cache if available
+        try:
+            seg_fridge_door = next(p for p in p_fridge_door if tuple(p_from[:len(p)]) == tuple(p))
+            seg_key = tuple(seg_fridge_door)
+
+            if seg_key not in visual_cache:
+                optimal_spot, _ = calculate_optimal_plant_spot_and_slider(
+                    task.world, task.agent_id, seg_fridge_door, fridge_access_point, task.config
+                )
+                l_A_vis = naive_A_map.get(optimal_spot, 0)
+                l_B_vis = naive_B_map.get(optimal_spot, 0)
+                visual_cache[seg_key] = (l_A_vis, l_B_vis, optimal_spot)
+            
+            likelihood_A_visual, likelihood_B_visual, optimal_spot = visual_cache[seg_key]
+
+        except StopIteration:
+            logger.warning("Could not find fridge-to-door segment for a path. Visual framing will be zero.")
+            likelihood_A_visual, likelihood_B_visual, optimal_spot = 0, 0, None
+        
+        all_optimal_spots.append(optimal_spot)
+
+        # Combine likelihoods by multiplying
+        likelihood_A = likelihood_A_visual * likelihood_A_audio
+        likelihood_B = likelihood_B_visual * likelihood_B_audio
+        
+        framing_metric = normalized_slider_prediction(likelihood_A, likelihood_B)
+        all_framing_metrics.append(framing_metric / 100.0)
+
+    # Rescale all costs to [0, 1]
+    rescaled_costs = rescale_costs(np.array(all_costs))
+
+    # Calculate final utilities using rescaled costs
+    utilities = []
+    for i in range(len(path_pairs)):
+        cost_factor = task.config.sampling.cost_weight * (1 - rescaled_costs[i])
+        framing_factor = (1 - task.config.sampling.cost_weight) * all_framing_metrics[i]
+        
+        if task.agent_id == 'A':
+            utility = cost_factor + framing_factor
+        else:
+            utility = cost_factor - framing_factor
+        utilities.append(utility)
+        
+    return np.array(utilities), all_optimal_spots, path_pairs
+
+def calculate_to_fridge_utilities(task: PathSamplingTask, paths_to_fridge: List) -> np.ndarray:
+    """Calculate utilities for the 'to fridge' path segment independently."""
+    if not paths_to_fridge:
+        return np.array([])
+
+    # Calculate cost based on this segment's length
+    costs = np.array([len(p) - 1 for p in paths_to_fridge])
+    rescaled_costs = rescale_costs(costs)
+
+    # Calculate audio framing based on this segment's length
+    utilities = []
+    for i, p_to in enumerate(paths_to_fridge):
+        len_to = len(p_to) - 1
+        # We assume a "neutral" from_length for this independent calculation, e.g., the average.
+        # A simpler way for this model is to just use the `to` likelihood.
+        likelihood_A, likelihood_B = compute_audio_framing_likelihoods(len_to, 0, task.config)
+        framing_metric = normalized_slider_prediction(likelihood_A, likelihood_B) / 100.0
+
+        cost_factor = task.config.sampling.cost_weight * (1 - rescaled_costs[i])
+        framing_factor = (1 - task.config.sampling.cost_weight) * framing_metric
+
+        if task.agent_id == 'A':
+            utility = cost_factor + framing_factor
+        else:
+            utility = cost_factor - framing_factor
+        utilities.append(utility)
+
+    return np.array(utilities)
+
+
+def calculate_from_fridge_utilities(task: PathSamplingTask, paths_from_fridge: List) -> Tuple[np.ndarray, List]:
+    """Calculate utilities for the 'from fridge' path segment independently."""
+    if not paths_from_fridge:
+        return np.array([]), []
+
+    # Calculate cost based on this segment's length
+    costs = np.array([len(p) - 1 for p in paths_from_fridge])
+    rescaled_costs = rescale_costs(costs)
+
+    # Calculate visual and audio framing
+    utilities = []
+    optimal_plant_spots = []
+    
+    _, _, p_fridge_door, _ = task.simple_path_sequences
+    fridge_access_point = task.world.get_fridge_access_point()
+    naive_A_map = getattr(task.config.evidence, 'naive_A_visual_likelihoods_map', {})
+    naive_B_map = getattr(task.config.evidence, 'naive_B_visual_likelihoods_map', {})
+
+    for i, p_from in enumerate(paths_from_fridge):
+        # Visual part
+        try:
+            seg_fridge_door = next(p for p in p_fridge_door if tuple(p_from[:len(p)]) == tuple(p))
+            optimal_spot, _ = calculate_optimal_plant_spot_and_slider(
+                task.world, task.agent_id, seg_fridge_door, fridge_access_point, task.config
+            )
+        except StopIteration:
+            optimal_spot = None
+        optimal_plant_spots.append(optimal_spot)
+        
+        likelihood_A_visual = naive_A_map.get(optimal_spot, 0)
+        likelihood_B_visual = naive_B_map.get(optimal_spot, 0)
+
+        # Audio part (independent of 'to' path)
+        len_from = len(p_from) - 1
+        likelihood_A_audio, likelihood_B_audio = compute_audio_framing_likelihoods(0, len_from, task.config)
+        
+        # Combine
+        framing_metric_visual = normalized_slider_prediction(likelihood_A_visual, 0) / 100.0
+        framing_metric_audio = normalized_slider_prediction(likelihood_A_audio, likelihood_B_audio) / 100.0
+        framing_metric = (framing_metric_visual + framing_metric_audio) / 2 # Example combination
+
+        cost_factor = task.config.sampling.cost_weight * (1 - rescaled_costs[i])
+        framing_factor = (1 - task.config.sampling.cost_weight) * framing_metric
+
+        if task.agent_id == 'A':
+            utility = cost_factor + framing_factor
+        else: # Agent B minimizes framing metric
+            utility = cost_factor - framing_factor
+        utilities.append(utility)
+
+    return np.array(utilities), optimal_plant_spots
+
+
+def group_paths_by_length(paths: List) -> Dict[int, List]:
+    """Groups a list of paths by their length."""
+    paths_by_len = {}
+    for path in paths:
+        length = len(path) - 1 if path else 0
+        if length not in paths_by_len:
+            paths_by_len[length] = []
+        paths_by_len[length].append(path)
+    return paths_by_len
 
 
 def calculate_single_audio_utility(
@@ -199,6 +366,16 @@ def rescale_costs(costs: np.ndarray) -> np.ndarray:
         return np.zeros_like(costs, dtype=float)
     
     return (costs - min_cost) / (max_cost - min_cost)
+
+
+def calculate_length_based_probabilities(paths: List, task: PathSamplingTask) -> np.ndarray:
+    """Calculate sampling probabilities for a list of paths based on their lengths."""
+    if not paths:
+        return np.array([])
+    costs = np.array([len(p) - 1 for p in paths])
+    # Higher utility for shorter paths
+    utilities = 1.0 - rescale_costs(costs)
+    return utilities_to_probabilities(utilities, task)
 
 
 def calculate_optimal_plant_spot_and_slider(

@@ -56,9 +56,6 @@ class EvidenceConfig:
     audio_similarity_sigma: float = 0.1
     audio_gt_step_size: int = 2
     
-    # Multimodal evidence settings
-    visual_weight: float = 0.5  # Weight for visual vs audio in multimodal
-    
     # Naive agent models (for sophisticated agents)
     naive_A_visual_likelihoods_map: Dict = field(default_factory=dict)
     naive_B_visual_likelihoods_map: Dict = field(default_factory=dict)
@@ -74,8 +71,6 @@ class EvidenceConfig:
             raise ValueError("audio_similarity_sigma must be between 0 and 1")
         if self.audio_gt_step_size < 1:
             raise ValueError("audio_gt_step_size must be at least 1")
-        if self.visual_weight < 0 or self.visual_weight > 1:
-            raise ValueError("visual_weight must be between 0 and 1")
         if self.visual_naive_likelihood_alpha < 0:
             raise ValueError("visual_naive_likelihood_alpha must be non-negative")
         if self.visual_sophisticated_likelihood_alpha < 0:
@@ -158,7 +153,7 @@ class SimulationConfig:
         config_files = {
             'visual': os.path.join(config_dir, 'visual.yaml'),
             'audio': os.path.join(config_dir, 'audio.yaml'),
-            'multimodal': os.path.join(config_dir, 'default.yaml')  # default for multimodal
+            'multimodal': os.path.join(config_dir, 'multimodal.yaml')
         }
         
         if evidence_type not in config_files:
@@ -236,14 +231,23 @@ class SimulationConfig:
     def create_multimodal_config(
         cls,
         trial_name: str,
-        visual_weight: float = 0.5,
+        cost_weight: float = 0.1,
+        naive_temp: float = 0.01,
+        sophisticated_temp: float = 0.01,
+        max_steps: int = 25,
+        audio_similarity_sigma: float = 0.1,
         **kwargs
     ) -> 'SimulationConfig':
         """Factory method for multimodal evidence simulation"""
-        sampling = SamplingConfig(**kwargs)
+        sampling = SamplingConfig(
+            cost_weight=cost_weight,
+            naive_temp=naive_temp,
+            sophisticated_temp=sophisticated_temp,
+            max_steps=max_steps
+        )
         evidence = EvidenceConfig(
             evidence_type="multimodal",
-            visual_weight=visual_weight
+            audio_similarity_sigma=audio_similarity_sigma
         )
         
         return cls(

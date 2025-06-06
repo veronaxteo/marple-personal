@@ -45,9 +45,12 @@ class EvidenceProcessor(ABC):
         raise NotImplementedError
 
 
-
 class VisualEvidenceProcessor(EvidenceProcessor):
-    """Handles visual evidence processing and predictions"""
+    """Handles visual evidence processing and predictions."""
+
+    def __init__(self, config: SimulationConfig):
+        super().__init__()
+        self.config = config
     
     def compute_detective_predictions(self, task: DetectiveTaskConfig) -> PredictionResult:
         """Compute visual evidence predictions using new config system"""
@@ -59,7 +62,7 @@ class VisualEvidenceProcessor(EvidenceProcessor):
             self.logger.warning("No valid crumb coordinates found")
             return PredictionResult({}, {}, {}, [])
         
-        # FIX: Access data from the dictionary of lists (Structure of Arrays)
+        # Access data from the dictionary of lists
         agent_A_data = task.sampled_data.get('A', {})
         agent_B_data = task.sampled_data.get('B', {})
         
@@ -151,11 +154,13 @@ class VisualEvidenceProcessor(EvidenceProcessor):
 
 
 class AudioEvidenceProcessor(EvidenceProcessor):
-    """Handles audio evidence processing and predictions"""
+    """Handles audio evidence processing and predictions."""
+    def __init__(self, config: SimulationConfig):
+        super().__init__()
+        self.config = config
     
     def compute_detective_predictions(self, task: DetectiveTaskConfig) -> PredictionResult:
         """Compute audio evidence predictions using new config system"""
-        
         self.logger.info(f"Computing AUDIO detective predictions for {task.agent_type_being_simulated} agents")
         
         gt_audio_sequences = generate_ground_truth_audio_sequences(task.world, task.config)
@@ -163,17 +168,12 @@ class AudioEvidenceProcessor(EvidenceProcessor):
             self.logger.warning("No ground truth audio sequences generated")
             return PredictionResult({}, ([], []), ([], []), [])
         
-        # FIX: Access data from the dictionary of lists (Structure of Arrays)
+        # Access data from the dictionary of lists
         agent_A_data = task.sampled_data.get('A', {})
         agent_B_data = task.sampled_data.get('B', {})
-        
-        # FIX: Use correct key 'audio_sequences'
         agent_A_audio_sequences = agent_A_data.get('audio_sequences', [])
         agent_B_audio_sequences = agent_B_data.get('audio_sequences', [])
-        
-        if not agent_A_audio_sequences or not agent_B_audio_sequences:
-            self.logger.warning("Missing audio sequences for agents")
-            return PredictionResult({}, ([], []), ([], []), [])
+
         
         agent_A_to_steps, agent_A_from_steps = self._extract_step_lengths(agent_A_audio_sequences)
         agent_B_to_steps, agent_B_from_steps = self._extract_step_lengths(agent_B_audio_sequences)
@@ -221,20 +221,12 @@ class AudioEvidenceProcessor(EvidenceProcessor):
         """Calculate likelihood of ground truth sequence given agent's sequences"""
         gt_steps_to = gt_sequence[0]
         gt_steps_from = gt_sequence[4]
-        gt_fridge_events = gt_sequence[1:4]
         
         total_likelihood = 0.0
         valid_sequences = 0
         sigma_factor = config.evidence.audio_similarity_sigma
         
-        for agent_seq in agent_sequences:
-            if not (isinstance(agent_seq, list) and len(agent_seq) == 5 and 
-                    isinstance(agent_seq[0], int) and isinstance(agent_seq[4], int)):
-                continue
-            
-            if gt_fridge_events != agent_seq[1:4]:
-                continue
-            
+        for agent_seq in agent_sequences:            
             agent_steps_to = agent_seq[0]
             agent_steps_from = agent_seq[4]
             
@@ -249,79 +241,61 @@ class AudioEvidenceProcessor(EvidenceProcessor):
 
 
 class MultimodalEvidenceProcessor(EvidenceProcessor):
-    """Handles multimodal (visual + audio) evidence processing"""
-    
-    def __init__(self):
+    """Processes combined visual and audio evidence"""
+
+    def __init__(self, config: SimulationConfig):
         super().__init__()
-        self.visual_processor = VisualEvidenceProcessor()
-        self.audio_processor = AudioEvidenceProcessor()
-    
+        self.config = config
+        self.visual_processor = VisualEvidenceProcessor(config)
+        self.audio_processor = AudioEvidenceProcessor(config)
+
     def compute_detective_predictions(self, task: DetectiveTaskConfig) -> PredictionResult:
-        """Compute multimodal predictions by combining visual and audio evidence"""
-        
         self.logger.info(f"Computing MULTIMODAL detective predictions for {task.agent_type_being_simulated} agents")
         
-        visual_task = DetectiveTaskConfig(
-            world=task.world,
-            sampled_data=task.sampled_data,
-            agent_type_being_simulated=task.agent_type_being_simulated,
-            trial_name=task.trial_name,
-            param_log_dir=None,
-            config=task.config
-        )
+        # Create sub-tasks, ensuring all necessary info is passed down
+        sub_task_info = {
+            'world': task.world,
+            'sampled_data': task.sampled_data,
+            'agent_type_being_simulated': task.agent_type_being_simulated,
+            'trial_name': task.trial_name,
+            'param_log_dir': task.param_log_dir,
+            'config': task.config
+        }
         
-        audio_task = DetectiveTaskConfig(
-            world=task.world,
-            sampled_data=task.sampled_data,
-            agent_type_being_simulated=task.agent_type_being_simulated,
-            trial_name=task.trial_name,
-            param_log_dir=None,
-            config=task.config
-        )
-        
+        visual_task = DetectiveTaskConfig(**sub_task_info)
         visual_result = self.visual_processor.compute_detective_predictions(visual_task)
+        
+        audio_task = DetectiveTaskConfig(**sub_task_info)
         audio_result = self.audio_processor.compute_detective_predictions(audio_task)
+
+        # Combine results
+        model_A = {'visual': visual_result.model_output_A, 'audio': audio_result.model_output_A}
+        model_B = {'visual': visual_result.model_output_B, 'audio': audio_result.model_output_B}
         
-        visual_weight = task.config.evidence.visual_weight
-        audio_weight = 1.0 - visual_weight
+        predictions = visual_result.predictions
+        prediction_data = visual_result.prediction_data_for_json
         
-        combined_predictions = {}
-        
-        # This combination logic assumes keys are unique or can be overwritten, which might not be ideal.
-        # A more robust approach might be to prefix keys.
-        for key, visual_pred in visual_result.predictions.items():
-            combined_predictions[f"multimodal_visual_{key}"] = visual_weight * visual_pred
-        
-        for key, audio_pred in audio_result.predictions.items():
-            combined_predictions[f"multimodal_audio_{key}"] = audio_weight * audio_pred
-        
-        combined_data = []
-        if visual_result.prediction_data_for_json:
-            combined_data.extend([{**item, 'modality': 'visual', 'weight': visual_weight} for item in visual_result.prediction_data_for_json])
-        if audio_result.prediction_data_for_json:
-            combined_data.extend([{**item, 'modality': 'audio', 'weight': audio_weight} for item in audio_result.prediction_data_for_json])
-        
-        if task.param_log_dir:
-            save_detective_predictions(combined_data, task)
-        
+        save_detective_predictions(prediction_data, task)
+
         return PredictionResult(
-            predictions=combined_predictions,
-            model_output_A={'visual': visual_result.model_output_A, 'audio': audio_result.model_output_A},
-            model_output_B={'visual': visual_result.model_output_B, 'audio': audio_result.model_output_B},
-            prediction_data_for_json=combined_data
+            predictions=predictions,
+            model_output_A=model_A,
+            model_output_B=model_B,
+            prediction_data_for_json=prediction_data
         )
+    
 
-
-def create_evidence_processor(evidence_type: str) -> EvidenceProcessor:
-    """Factory function to create appropriate evidence processor"""
+def get_evidence_processor(config) -> EvidenceProcessor:
+    """Factory function to get the appropriate evidence processor."""
+    evidence_type = config.evidence.evidence_type
     if evidence_type == 'visual':
-        return VisualEvidenceProcessor()
+        return VisualEvidenceProcessor(config)
     elif evidence_type == 'audio':
-        return AudioEvidenceProcessor()
+        return AudioEvidenceProcessor(config)
     elif evidence_type == 'multimodal':
-        return MultimodalEvidenceProcessor()
+        return MultimodalEvidenceProcessor(config)
     else:
-        raise ValueError(f"Unknown evidence type: {evidence_type}") 
+        raise ValueError(f"Unsupported evidence type: {evidence_type}")
 
 
 def save_detective_predictions(prediction_data: List[Dict], task: DetectiveTaskConfig) -> None:

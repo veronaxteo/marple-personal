@@ -116,7 +116,7 @@ class World:
             agent_id=agent_id,
             world_graph=self.world_graph,
             geometry=self.geometry,
-            start_coords=self.start_coords
+            start_coords=self.start_coords,
             max_steps=max_steps
         ) 
     

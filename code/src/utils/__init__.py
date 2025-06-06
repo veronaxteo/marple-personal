@@ -13,13 +13,10 @@ from .evidence_utils import (
     VisualEvidenceProcessor, 
     AudioEvidenceProcessor,
     MultimodalEvidenceProcessor,
-    create_evidence_processor,
-    EvidenceData,
-    PredictionResult
+    EvidenceData
 )
 
 from .io_utils import (
-    ensure_serializable,
     get_json_files,
     create_param_dir,
     save_sampled_paths_to_csv,
@@ -44,9 +41,8 @@ __all__ = [
     'VisualEvidenceProcessor',
     'AudioEvidenceProcessor', 
     'MultimodalEvidenceProcessor',
-    'create_evidence_processor',
     'EvidenceData',
-    'PredictionResult',
+    'PredictionResult'
     
     # I/O utilities
     'ensure_serializable',
