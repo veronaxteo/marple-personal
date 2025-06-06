@@ -23,7 +23,8 @@ from .io_utils import (
     get_json_files,
     create_param_dir,
     save_sampled_paths_to_csv,
-    save_grid_to_json
+    save_grid_to_json,
+    load_json
 )
 
 from .math_utils import (
@@ -53,6 +54,7 @@ __all__ = [
     'create_param_dir',
     'save_sampled_paths_to_csv',
     'save_grid_to_json',
+    'load_json',
     
     # Math utilities
     'normalized_slider_prediction',

@@ -25,29 +25,23 @@ def plot_smoothing_comparison(trial_name: str, param_log_dir: str, raw_likelihoo
     """
     logger = logging.getLogger(__name__)
     
-    # Create plots dir
     plots_dir = os.path.join(param_log_dir, 'plots')
     os.makedirs(plots_dir, exist_ok=True)
     
-    # Apply both smoothing methods
     sigma_steps = max(1, int(sigma_value))
     
-    # 2d grid-based smoothing
     old_smoothed_A = smooth_likelihoods_old(raw_likelihood_map_A, world, sigma_value)
     old_smoothed_B = smooth_likelihoods_old(raw_likelihood_map_B, world, sigma_value)
     
-    # Connectivity-aware smoothing
-    precomputed_neighbors = compute_all_graph_neighbors(world, raw_likelihood_map_A.keys())
+    precomputed_neighbors = compute_all_graph_neighbors(world, list(raw_likelihood_map_A.keys()))
     new_smoothed_A = smooth_likelihoods(raw_likelihood_map_A, sigma_steps, precomputed_neighbors)
     new_smoothed_B = smooth_likelihoods(raw_likelihood_map_B, sigma_steps, precomputed_neighbors)
     
-    # Create comparison plots for Agent A
     _create_smoothing_comparison_plot(
         trial_name, plots_dir, raw_likelihood_map_A, old_smoothed_A, new_smoothed_A, 
         world, "A", sigma_value, logger
     )
     
-    # Create comparison plots for Agent B  
     _create_smoothing_comparison_plot(
         trial_name, plots_dir, raw_likelihood_map_B, old_smoothed_B, new_smoothed_B,
         world, "B", sigma_value, logger
@@ -62,41 +56,34 @@ def _create_smoothing_comparison_plot(trial_name: str, plots_dir: str, raw_map: 
     plot_width = world.width
     plot_height = world.height
     
-    # Create grids for each smoothing method
     raw_grid = np.full((plot_height, plot_width), np.nan)
     old_grid = np.full((plot_height, plot_width), np.nan) 
     new_grid = np.full((plot_height, plot_width), np.nan)
     
-    # Fill raw likelihood grid
     for coord, likelihood in raw_map.items():
         if 0 <= coord[0] < plot_width and 0 <= coord[1] < plot_height:
             raw_grid[coord[1], coord[0]] = likelihood
     
-    # Fill old smoothed grid
     for coord, likelihood in old_smoothed.items():
         if 0 <= coord[0] < plot_width and 0 <= coord[1] < plot_height:
             old_grid[coord[1], coord[0]] = likelihood
             
-    # Fill new smoothed grid
     for coord, likelihood in new_smoothed.items():
         if 0 <= coord[0] < plot_width and 0 <= coord[1] < plot_height:
             new_grid[coord[1], coord[0]] = likelihood
     
     _, axes = plt.subplots(1, 3, figsize=(18, 6))
     
-    # Raw likelihoods
     sns.heatmap(raw_grid, ax=axes[0], cmap='viridis', cbar=True, linewidths=0)
     axes[0].set_title(f"Raw Likelihoods - Agent {agent_id}")
     axes[0].set_xlabel("World X")
     axes[0].set_ylabel("World Y")
     
-    # Old grid-based smoothing
     sns.heatmap(old_grid, ax=axes[1], cmap='viridis', cbar=True, linewidths=0)
     axes[1].set_title(f"Grid-Based Smoothing - Agent {agent_id}\n(σ={sigma_value})")
     axes[1].set_xlabel("World X") 
     axes[1].set_ylabel("World Y")
     
-    # New connectivity-aware smoothing
     sns.heatmap(new_grid, ax=axes[2], cmap='viridis', cbar=True, linewidths=0)
     axes[2].set_title(f"Connectivity-Aware Smoothing - Agent {agent_id}\n(σ_steps={max(1, int(sigma_value))})")
     axes[2].set_xlabel("World X")
@@ -105,7 +92,6 @@ def _create_smoothing_comparison_plot(trial_name: str, plots_dir: str, raw_map: 
     plt.suptitle(f"Smoothing Comparison - Trial: {trial_name}, Agent {agent_id}", fontsize=16)
     plt.tight_layout()
     
-    # Save plot in plots dir
     comparison_filename = os.path.join(plots_dir, f"smoothing_comparison_agent_{agent_id}_{trial_name}.png")
     plt.savefig(comparison_filename, dpi=150, bbox_inches='tight')
     logger.info(f"Saved smoothing comparison plot for Agent {agent_id} to {comparison_filename}")
@@ -116,119 +102,70 @@ def plot_suspect_paths_heatmap(trial_name: str, param_log_dir: str, agent_type_t
                              evidence_type: str = 'visual', path_segment_type: str = 'return_from_fridge'):
     """
     Generates and saves heatmaps of sampled path frequencies for suspects A and B.
-    
-    Args:
-        trial_name: Name of the trial
-        param_log_dir: Directory containing the CSV files
-        agent_type_to_plot: Agent type ('naive' or 'sophisticated')
-        evidence_type: Evidence type ('visual' or 'audio')
-        path_segment_type: Path segment ('to_fridge', 'return_from_fridge')
     """
     logger = logging.getLogger(__name__)
 
-    # Create plots dir
     plots_dir = os.path.join(param_log_dir, 'plots')
     os.makedirs(plots_dir, exist_ok=True)
 
     trial_file_name = f"{trial_name}_A1.json"
     world = World.initialize_world_start(trial_file_name)
     
-    # Use full apartment dimensions for both audio and visual evidence
     plot_width = world.width
     plot_height = world.height
-    coord_offset_x = 0
-    coord_offset_y = 0
-
+    
     csv_file_path = os.path.join(param_log_dir, f"{trial_name}_sampled_paths_{agent_type_to_plot}.csv")
+    if not os.path.exists(csv_file_path):
+        logger.warning(f"CSV file for path plotting not found: {csv_file_path}")
+        return
+        
     paths_df = pd.read_csv(csv_file_path)
 
-    # Determine path column and title based on evidence type and segment type
+    # Determine which path segment to plot based on user request
     if path_segment_type == 'to_fridge':
-        if evidence_type == 'audio':
-            path_column_name = 'to_fridge_sequence'
-        elif evidence_type == 'visual':
-            path_column_name = 'full_sequence'
+        path_column_name = 'to_fridge_sequence'
         plot_title_segment = "Path to Fridge Tile Counts"
     elif path_segment_type == 'return_from_fridge':
-        if evidence_type == 'audio':
-            path_column_name = 'middle_sequence'  # From fridge to door
-            plot_title_segment = "Path from Fridge to Door Tile Counts"
-        elif evidence_type == 'visual':
-            path_column_name = 'full_sequence'
-            plot_title_segment = "Return Path Tile Counts (from Fridge)"
+        path_column_name = 'return_sequence'
+        plot_title_segment = "Return Path Tile Counts"
     else:
         path_column_name = 'full_sequence'
         plot_title_segment = "Full Path Tile Counts"
 
-    fridge_access_point = world.get_fridge_access_point()
-
     for agent_id in ['A', 'B']:
-        agent_df = paths_df[paths_df['agent'] == agent_id]
+        agent_df = paths_df[paths_df['agent_id'] == agent_id]
+        if agent_df.empty:
+            continue
 
-        agent_paths_str_list = agent_df[path_column_name].tolist()
+        agent_paths_str_list = agent_df[path_column_name].dropna().tolist()
         heatmap_grid = np.zeros((plot_height, plot_width))
-        paths_processed_count = 0
 
         for path_str in agent_paths_str_list:
-            path_coords_world_full = ast.literal_eval(path_str)
-            
-            path_coords_to_plot = []
-            if evidence_type == 'visual' and fridge_access_point and path_coords_world_full:
-                # Visual: handle path slicing based on segment type
-                fridge_ap_tuple = tuple(fridge_access_point)
-                path_coords_world_tuples = [tuple(map(int, coord)) for coord in path_coords_world_full if isinstance(coord, (list, tuple)) and len(coord) == 2]
-                fridge_idx = -1
-                for i, coord_tuple in enumerate(path_coords_world_tuples):
-                    if coord_tuple == fridge_ap_tuple:
-                        fridge_idx = i
-                        break
-                
-                if fridge_idx != -1:
-                    if path_segment_type == 'to_fridge':
-                        # Plot from start to fridge (inclusive)
-                        path_coords_to_plot = path_coords_world_tuples[:fridge_idx + 1]
-                    elif path_segment_type == 'return_from_fridge':
-                        # Plot from fridge to end
-                        path_coords_to_plot = path_coords_world_tuples[fridge_idx:]
-                    else:
-                        path_coords_to_plot = path_coords_world_tuples
-                else:
-                    path_coords_to_plot = path_coords_world_tuples
-            elif evidence_type == 'audio':
-                # Audio: plot the selected segment directly using full apartment
-                path_coords_to_plot = [tuple(map(int, coord)) for coord in path_coords_world_full if isinstance(coord, (list, tuple)) and len(coord) == 2]
-            else:
-                path_coords_to_plot = [tuple(map(int, coord)) for coord in path_coords_world_full if isinstance(coord, (list, tuple)) and len(coord) == 2]
-
-            paths_processed_count += 1
-            for world_coord_tuple_anytype in path_coords_to_plot: 
-                if isinstance(world_coord_tuple_anytype, (list, tuple)) and len(world_coord_tuple_anytype) == 2 and \
-                   all(isinstance(c, (int, float)) for c in world_coord_tuple_anytype):
-                    world_coord_tuple = tuple(map(int, world_coord_tuple_anytype))
-                    
-                    # For both audio and visual, plot all coordinates within apartment bounds
-                    plot_x = world_coord_tuple[0] - coord_offset_x
-                    plot_y = world_coord_tuple[1] - coord_offset_y
-                    if 0 <= plot_x < plot_width and 0 <= plot_y < plot_height:
-                        heatmap_grid[plot_y, plot_x] += 1
+            try:
+                # The path is already the correct segment, no need for complex slicing logic
+                path_coords_to_plot = ast.literal_eval(path_str)
+                for coord in path_coords_to_plot:
+                    if isinstance(coord, (list, tuple)) and len(coord) == 2:
+                        plot_x, plot_y = int(coord[0]), int(coord[1])
+                        if 0 <= plot_x < plot_width and 0 <= plot_y < plot_height:
+                            heatmap_grid[plot_y, plot_x] += 1
+            except (ValueError, SyntaxError):
+                logger.warning(f"Could not parse path string: {path_str}")
+                continue
 
         plt.figure(figsize=(12, 8)) 
-        
         cmap = 'Blues' if agent_id == 'A' else 'Greens'
         
-        # Create heatmap with grid lines and annotations
         sns.heatmap(heatmap_grid, cmap=cmap, cbar=True, annot=True, fmt=".0f", 
                    linewidths=0.5, linecolor='gray')
         
-        # Add labels and title
         plt.title(f"{plot_title_segment} - Agent {agent_id}\n"
-                 f"Trial: {trial_name}, Type: {agent_type_to_plot}, Evidence: {evidence_type}")
+                 f"Trial: {trial_name}, Type: {agent_type_to_plot}")
         plt.xlabel("World X")
         plt.ylabel("World Y")
         
-        # Save plot in plots directory
         plot_filename = os.path.join(plots_dir, 
-                                   f"heatmap_{evidence_type}_{path_segment_type}_agent_{agent_id}_{trial_name}_{agent_type_to_plot}.png")
+                                   f"heatmap_{path_segment_type}_agent_{agent_id}_{trial_name}_{agent_type_to_plot}.png")
         plt.savefig(plot_filename, dpi=150, bbox_inches='tight')
         logger.info(f"Saved heatmap for Agent {agent_id} to {plot_filename}")
         plt.close()
@@ -239,7 +176,6 @@ def create_summary_plots(param_log_dir: str, trial_name: str):
     logger = logging.getLogger(__name__)
     logger.info(f"Creating summary plots for trial {trial_name} in {param_log_dir}")
     
-    # List of potential plot types to generate
     plot_types = [
         ('visual', 'return_from_fridge'),
         ('visual', 'to_fridge'), 
@@ -268,16 +204,13 @@ def plot_detective_predictions_heatmap(trial_name: str, param_log_dir: str, dete
     """Plot detective predictions as a heatmap showing slider values (-50 to +50)"""
     logger = logging.getLogger(__name__)
 
-    # Create plots directory if it doesn't exist
     plots_dir = os.path.join(param_log_dir, 'plots')
     os.makedirs(plots_dir, exist_ok=True)
 
     if evidence_type == 'audio':
-        # For audio evidence, use the specialized sequence length heatmap
         plot_detective_audio_predictions_heatmap(trial_name, param_log_dir, detective_agent_type)
         return
     
-    # Load prediction data
     predictions_file = os.path.join(param_log_dir, f"{trial_name}_{detective_agent_type}_{evidence_type}_predictions.json")
     if not os.path.exists(predictions_file):
         logger.warning(f"Predictions file not found: {predictions_file}")
@@ -291,18 +224,15 @@ def plot_detective_predictions_heatmap(trial_name: str, param_log_dir: str, dete
         logger.warning(f"No predictions found in {predictions_file}")
         return
     
-    # Load world for dimensions
     trial_file_name = f"{trial_name}_A1.json"
     world = World.initialize_world_start(trial_file_name)
     
-    # Create full apartment view
     plot_width = world.width
     plot_height = world.height
     heatmap_grid = np.full((plot_height, plot_width), np.nan)
     
     predictions_plotted = 0
     for pred_entry in predictions_data:
-        # Handle both data structures
         world_coord_tuple = None
         slider_prediction = None
         
@@ -329,11 +259,9 @@ def plot_detective_predictions_heatmap(trial_name: str, param_log_dir: str, dete
     plt.xlabel("Apartment X Coordinate")
     plt.ylabel("Apartment Y Coordinate")
     
-    # Set ticks for world coordinates
-    plt.xticks(ticks=np.arange(0.5, plot_width, 1), labels=np.arange(1, plot_width + 1))
-    plt.yticks(ticks=np.arange(0.5, plot_height, 1), labels=np.arange(plot_height, 0, -1))
+    plt.xticks(ticks=np.arange(0.5, plot_width, 1), labels=np.arange(0, plot_width))
+    plt.yticks(ticks=np.arange(0.5, plot_height, 1), labels=np.arange(0, plot_height))
     
-    # Save plot in plots directory
     heatmap_filename = os.path.join(plots_dir, f"detective_preds_heatmap_{detective_agent_type}_{evidence_type}_{trial_name}.png")
     plt.savefig(heatmap_filename, dpi=150, bbox_inches='tight')
     logger.info(f"Saved detective predictions heatmap to {heatmap_filename}")
@@ -344,11 +272,9 @@ def plot_detective_audio_predictions_heatmap(trial_name: str, param_log_dir: str
     """Plot audio detective predictions as a heatmap based on sequence lengths to/from fridge"""
     logger = logging.getLogger(__name__)
     
-    # Create plots directory if it doesn't exist
     plots_dir = os.path.join(param_log_dir, 'plots')
     os.makedirs(plots_dir, exist_ok=True)
     
-    # Load prediction data
     predictions_file = os.path.join(param_log_dir, f"{trial_name}_{detective_agent_type}_audio_predictions.json")
     if not os.path.exists(predictions_file):
         logger.warning(f"Audio predictions file not found: {predictions_file}")
@@ -362,7 +288,6 @@ def plot_detective_audio_predictions_heatmap(trial_name: str, param_log_dir: str
         logger.warning(f"No predictions found in {predictions_file}")
         return
     
-    # Extract sequence lengths and predictions
     to_fridge_lengths = []
     from_fridge_lengths = []
     prediction_values = []
@@ -372,7 +297,6 @@ def plot_detective_audio_predictions_heatmap(trial_name: str, param_log_dir: str
         prediction = pred_entry.get('prediction')
         
         if len(gt_sequence) >= 5 and prediction is not None:
-            # First element is distance to fridge, last element is distance from fridge
             to_fridge = gt_sequence[0]
             from_fridge = gt_sequence[-1]
             
@@ -380,19 +304,14 @@ def plot_detective_audio_predictions_heatmap(trial_name: str, param_log_dir: str
             from_fridge_lengths.append(from_fridge)
             prediction_values.append(prediction)
     
-    # Get unique sequence lengths for axes
     unique_to_lengths = sorted(set(to_fridge_lengths))
     unique_from_lengths = sorted(set(from_fridge_lengths))
     
-    # Create heatmap grid
     heatmap_grid = np.full((len(unique_from_lengths), len(unique_to_lengths)), np.nan)
     
-    
-    # Map lengths to grid indices
     to_length_map = {length: i for i, length in enumerate(unique_to_lengths)}
     from_length_map = {length: i for i, length in enumerate(unique_from_lengths)}
     
-    # Fill the grid
     predictions_plotted = 0
     for to_len, from_len, pred_val in zip(to_fridge_lengths, from_fridge_lengths, prediction_values):
         if to_len in to_length_map and from_len in from_length_map:
@@ -405,7 +324,6 @@ def plot_detective_audio_predictions_heatmap(trial_name: str, param_log_dir: str
     
     plt.figure(figsize=(12, 10))
     
-    # Create heatmap with custom colormap
     sns.heatmap(heatmap_grid, 
                 annot=True, 
                 fmt=".1f", 
@@ -417,18 +335,16 @@ def plot_detective_audio_predictions_heatmap(trial_name: str, param_log_dir: str
                 linewidths=0.5, 
                 linecolor='gray',
                 xticklabels=unique_to_lengths,
-                yticklabels=unique_from_lengths[::-1])  # Reverse y-axis labels
+                yticklabels=unique_from_lengths)
     
     plt.title(f"Audio Detective Predictions ({detective_agent_type.capitalize()})\n"
               f"Trial: {trial_name}, Slider: (-50: A, +50: B)")
     plt.xlabel("Sequence Length TO Fridge")
     plt.ylabel("Sequence Length FROM Fridge")
     
-    # Add colorbar label
     cbar = plt.gca().collections[0].colorbar
     cbar.set_label('Detective Prediction (-50: A, +50: B)', rotation=270, labelpad=20)
     
-    # Save plot in plots directory
     heatmap_filename = os.path.join(plots_dir, f"detective_audio_preds_heatmap_{detective_agent_type}_{trial_name}.png")
     plt.savefig(heatmap_filename, dpi=150, bbox_inches='tight')
     logger.info(f"Saved audio detective predictions heatmap to {heatmap_filename}")
@@ -439,11 +355,9 @@ def plot_suspect_crumb_planting_heatmap(trial_name: str, param_log_dir: str):
     """Plot sophisticated suspect crumb planting locations"""
     logger = logging.getLogger(__name__)
     
-    # Create plots directory if it doesn't exist
     plots_dir = os.path.join(param_log_dir, 'plots')
     os.makedirs(plots_dir, exist_ok=True)
     
-    # Load sophisticated paths CSV
     csv_file_path = os.path.join(param_log_dir, f"{trial_name}_sampled_paths_sophisticated.csv")
     if not os.path.exists(csv_file_path):
         logger.warning(f"Sophisticated paths CSV not found: {csv_file_path}")
@@ -451,23 +365,20 @@ def plot_suspect_crumb_planting_heatmap(trial_name: str, param_log_dir: str):
     
     paths_df = pd.read_csv(csv_file_path)
     
-    # Load world for coordinates
     trial_file_name = f"{trial_name}_A1.json"
     world = World.initialize_world_start(trial_file_name)
     
-    # Use full apartment dimensions
     plot_width = world.width
     plot_height = world.height
     
     for agent_id in ['A', 'B']:
-        agent_df = paths_df[paths_df['agent'] == agent_id]
+        agent_df = paths_df[paths_df['agent_id'] == agent_id]
         
-        # Extract chosen plant spots
-        plant_spots_str_list = agent_df['chosen_plant_spot'].tolist()
+        plant_spots_str_list = agent_df['chosen_plant_spot'].dropna().tolist()
         plant_spots_counts = {}
         
         for spot_str in plant_spots_str_list:
-            if spot_str and spot_str != 'None' and spot_str != '[]' and spot_str != 'nan':
+            if spot_str and spot_str != 'None':
                 try:
                     spot_coord = ast.literal_eval(spot_str)
                     if isinstance(spot_coord, (list, tuple)) and len(spot_coord) == 2:
@@ -480,7 +391,6 @@ def plot_suspect_crumb_planting_heatmap(trial_name: str, param_log_dir: str):
             logger.warning(f"No valid plant spots found for Agent {agent_id}")
             continue
         
-        # Create heatmap grid for full apartment
         heatmap_grid = np.zeros((plot_height, plot_width))
         
         for world_coord_tuple, count in plant_spots_counts.items():
@@ -489,7 +399,6 @@ def plot_suspect_crumb_planting_heatmap(trial_name: str, param_log_dir: str):
                 heatmap_grid[world_y, world_x] = count
         
         plt.figure(figsize=(12, 8))
-        # Use correct color scheme: A = Blues, B = Reds
         cmap = 'Blues' if agent_id == 'A' else 'Reds'
         sns.heatmap(heatmap_grid, annot=True, fmt=".0f", cmap=cmap, cbar=True, 
                    linewidths=0.5, linecolor='gray')
@@ -498,7 +407,6 @@ def plot_suspect_crumb_planting_heatmap(trial_name: str, param_log_dir: str):
         plt.xlabel("World X")
         plt.ylabel("World Y")
         
-        # Save plot in plots directory
         plot_filename = os.path.join(plots_dir, f"crumb_planting_heatmap_agent_{agent_id}_{trial_name}.png")
         plt.savefig(plot_filename, dpi=150, bbox_inches='tight')
         logger.info(f"Saved crumb planting heatmap for Agent {agent_id} to {plot_filename}")
@@ -510,35 +418,33 @@ def create_simulation_plots(param_log_dir: str, trial_name: str, evidence_type: 
     logger = logging.getLogger(__name__)
     logger.info(f"Creating {evidence_type} evidence plots for trial {trial_name} in {param_log_dir}")
     
-    # Path segment types to plot
     path_segments = ['return_from_fridge', 'to_fridge']
     agent_types = ['naive', 'sophisticated']
     
-    # 1. Plot suspect path heatmaps (only for the evidence type used)
     for agent_type in agent_types:
         csv_path = os.path.join(param_log_dir, f"{trial_name}_sampled_paths_{agent_type}.csv")
         if os.path.exists(csv_path):
+            # Plot path heatmaps regardless of evidence type, using the new columns
             for path_segment_type in path_segments:
                 try:
+                    # Pass a dummy evidence_type as it's no longer needed for path selection
                     plot_suspect_paths_heatmap(trial_name, param_log_dir, agent_type, 
-                                             evidence_type, path_segment_type)
+                                             'visual', path_segment_type)
                 except Exception as e:
-                    logger.warning(f"Could not create {evidence_type} {path_segment_type} plot for {agent_type}: {e}")
+                    logger.warning(f"Could not create {path_segment_type} plot for {agent_type}: {e}")
         else:
             logger.warning(f"CSV file not found: {csv_path}")
     
-    # 2. Plot crumb planting heatmaps (for sophisticated agents in visual evidence)
     if evidence_type == 'visual':
         try:
             plot_suspect_crumb_planting_heatmap(trial_name, param_log_dir)
         except Exception as e:
             logger.warning(f"Could not create crumb planting heatmap: {e}")
     
-    # 3. Plot detective predictions for both naive and sophisticated
     for agent_type in ['naive', 'sophisticated']:
         try:
             plot_detective_predictions_heatmap(trial_name, param_log_dir, agent_type, evidence_type)
         except Exception as e:
             logger.warning(f"Could not create detective predictions plot for {agent_type}: {e}")
     
-    logger.info(f"Completed {evidence_type} evidence plots for {trial_name}") 
+    logger.info(f"Completed {evidence_type} evidence plots for {trial_name}")

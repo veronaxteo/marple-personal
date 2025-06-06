@@ -9,9 +9,11 @@ This module provides:
 
 from .sampling import PathSampler, SamplingResult
 from .utilities import (
-    group_paths_by_length,
     utilities_to_probabilities,
     rescale_costs,
+    calculate_optimal_plant_spot_and_slider,
+    get_noisy_plant_spot,
+    calculate_audio_utilities
 )
 
 __all__ = [
@@ -20,7 +22,9 @@ __all__ = [
     'SamplingResult',
     
     # Utility functions
-    'group_paths_by_length',
     'utilities_to_probabilities',
-    'rescale_costs'
+    'rescale_costs',
+    'calculate_optimal_plant_spot_and_slider',
+    'get_noisy_plant_spot',
+    'calculate_audio_utilities'
 ] 

@@ -14,12 +14,11 @@ from src.core.evidence import get_compressed_audio_from_path
 from src.cfg import PathSamplingTask
 from .utilities import (
     calculate_audio_utilities,
-    group_paths_by_length,
-    sample_paths_with_lengths,
+    calculate_visual_utilities,
     utilities_to_probabilities,
-    calculate_optimal_plant_spot_and_slider,
     get_noisy_plant_spot,
-    is_valid_audio_sequence
+    rescale_costs,
+    group_paths_by_length
 )
 
 
@@ -27,187 +26,169 @@ from .utilities import (
 class SamplingResult:
     """Container for path sampling results"""
     full_sequences: List
-    middle_sequences: List
+    middle_sequences: List 
+    return_sequences: List
     chosen_plant_spots: List
     audio_sequences: List
     to_fridge_sequences: List
     full_sequence_lengths: List
     to_fridge_sequence_lengths: List
     middle_sequence_lengths: List
+    return_sequence_lengths: List
 
 
 class PathSampler:
     """Handles path sampling logic for different evidence types and agent behaviors."""
     def __init__(self, world):
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.audio_framing_cache = {}
         self.world = world
     
-
     def sample_paths(self, task: PathSamplingTask) -> Dict:
-        """Main entry point for path sampling."""
+        """Dispatcher to call the appropriate sampling method based on evidence type."""
         if task.config.evidence.evidence_type == 'visual':
             return self._sample_visual_paths(task)
         elif task.config.evidence.evidence_type == 'audio':
             return self._sample_audio_paths(task)
         else:
             raise ValueError(f"Unsupported evidence type: {task.config.evidence.evidence_type}")
-    
 
     def _sample_visual_paths(self, task: PathSamplingTask) -> Dict:
-        """Sample paths for visual evidence."""
+        """Samples paths for visual evidence scenarios."""
+        p_start_door, p_door_fridge, p_fridge_door, p_door_start = task.simple_path_sequences
         
-        sequences_p1, sequences_p2, sequences_p3, sequences_fridge_to_start = task.simple_path_sequences
+        result = SamplingResult([], [], [], [], [], [], [], [], [], [])
         
-        # Calculate utilities and probabilities for P2 (Fridge->Door)
-        utilities, optimal_plant_spots = self._calculate_visual_utilities(task, sequences_p2)
-        
-        # Handle case where no utilities were calculated
-        if len(utilities) == 0:
-            self.logger.error(f"No valid utilities calculated for agent {task.agent_id}")
-            return SamplingResult([], [], [], [], [], [], [], []).__dict__
-        
-        probabilities = utilities_to_probabilities(utilities, task)
-        
-        # Sample paths
-        result = SamplingResult([], [], [], [], [], [], [], [])
-        
+        if task.agent_type == 'sophisticated':
+            # Probability calculation for strategic path (fridge to door)
+            utilities_strategic, optimal_plant_spots = calculate_visual_utilities(task, p_fridge_door)
+            probs_fridge_to_door = utilities_to_probabilities(utilities_strategic, task)
+
+            # Length-based probabilities for all other non-strategic segments
+            costs_start_door = np.array([len(p) - 1 for p in p_start_door])
+            probs_start_door = utilities_to_probabilities(1.0 - rescale_costs(costs_start_door), task)
+            
+            costs_door_fridge = np.array([len(p) - 1 for p in p_door_fridge])
+            probs_door_fridge = utilities_to_probabilities(1.0 - rescale_costs(costs_door_fridge), task)
+
+            costs_door_start = np.array([len(p) - 1 for p in p_door_start])
+            probs_door_start = utilities_to_probabilities(1.0 - rescale_costs(costs_door_start), task)
+
+        elif task.agent_type == 'naive':
+            # For naive, calculate probabilities for the full composite paths based on length
+            paths_to_fridge = [p1[:-1] + p2 for p1 in p_start_door for p2 in p_door_fridge]
+            paths_from_fridge = [p3[:-1] + p4 for p3 in p_fridge_door for p4 in p_door_start]
+
+            costs_to = np.array([len(p) - 1 for p in paths_to_fridge])
+            probs_to_fridge = utilities_to_probabilities(1.0 - rescale_costs(costs_to), task)
+            
+            costs_from = np.array([len(p) - 1 for p in paths_from_fridge])
+            probs_from_fridge = utilities_to_probabilities(1.0 - rescale_costs(costs_from), task)
+            
+        # Path sampling
         for _ in range(task.num_sample_paths):
-            # Randomly select path segments
-            idx1 = np.random.randint(0, len(sequences_p1))
-            idx3 = np.random.randint(0, len(sequences_p3))
-            idx2 = np.random.choice(len(sequences_p2), p=probabilities)
             
-            p1_seq = sequences_p1[idx1]  # Start -> Fridge
-            p2_seq = sequences_p2[idx2]  # Fridge -> Door
-            p3_seq = sequences_p3[idx3]  # Door -> Start
-            
-            # Combine sequences
-            full_sequence = p1_seq[:-1] + p2_seq[:-1] + p3_seq
+            if task.agent_type == 'naive':
+                idx_to = np.random.choice(len(paths_to_fridge), p=probs_to_fridge)
+                to_fridge_sequence = paths_to_fridge[idx_to]
+
+                idx_from = np.random.choice(len(paths_from_fridge), p=probs_from_fridge)
+                return_sequence = paths_from_fridge[idx_from]
+                
+                seg_fridge_door = next(p for p in p_fridge_door if tuple(return_sequence[:len(p)]) == tuple(p))
+                
+            elif task.agent_type == 'sophisticated':
+                # Sample each segment according to its calculated probability distribution
+                idx_start_door = np.random.choice(len(p_start_door), p=probs_start_door)
+                idx_door_to_fridge = np.random.choice(len(p_door_fridge), p=probs_door_fridge)
+                idx_fridge_to_door = np.random.choice(len(p_fridge_door), p=probs_fridge_to_door)
+                idx_door_to_start = np.random.choice(len(p_door_start), p=probs_door_start)
+                
+                # Assemble the sequences from the chosen segment indices
+                seg_start_door = p_start_door[idx_start_door]
+                seg_door_fridge = p_door_fridge[idx_door_to_fridge]
+                seg_fridge_door = p_fridge_door[idx_fridge_to_door]
+                seg_door_start = p_door_start[idx_door_to_start]
+                
+                to_fridge_sequence = seg_start_door[:-1] + seg_door_fridge
+                return_sequence = seg_fridge_door[:-1] + seg_door_start
+
+            # Save results
+            full_sequence = to_fridge_sequence[:-1] + return_sequence
             
             result.full_sequences.append(full_sequence)
-            result.middle_sequences.append(p2_seq)
-            result.to_fridge_sequences.append(p1_seq)
-            
-            # Calculate lengths
-            result.full_sequence_lengths.append(len(full_sequence) - 1 if full_sequence else 0)
-            result.to_fridge_sequence_lengths.append(len(p1_seq) - 1 if p1_seq else 0)
-            result.middle_sequence_lengths.append(len(p2_seq) - 1 if p2_seq else 0)
-            
-            # Handle plant spots for sophisticated agents
-            chosen_plant_spot = None
-            valid_plant_spots = set(self.world.get_valid_kitchen_crumb_coords())
+            result.to_fridge_sequences.append(to_fridge_sequence)
+            result.return_sequences.append(return_sequence)
+            result.middle_sequences.append(seg_fridge_door)
 
-            if task.agent_type == 'sophisticated' and optimal_plant_spots[idx2] is not None:
-                optimal_spot = optimal_plant_spots[idx2]
-                if task.config.evidence.crumb_planting_sigma > 0:
-                    # add noise to crumb planting execution
-                    chosen_plant_spot = get_noisy_plant_spot(
-                        optimal_spot, 
-                        task.config.evidence.crumb_planting_sigma, 
-                        valid_plant_spots
-                    )
-                else:
-                    chosen_plant_spot = optimal_spot
+            chosen_plant_spot = None
+            if task.agent_type == 'sophisticated':
+                if optimal_plant_spots[idx_fridge_to_door] is not None:
+                    optimal_spot = optimal_plant_spots[idx_fridge_to_door]
+                    if task.config.evidence.crumb_planting_sigma > 0:
+                        chosen_plant_spot = get_noisy_plant_spot(optimal_spot, task.config.evidence.crumb_planting_sigma, set(self.world.get_valid_kitchen_crumb_coords()))
+                    else:
+                        chosen_plant_spot = optimal_spot
             result.chosen_plant_spots.append(chosen_plant_spot)
+            
+            result.full_sequence_lengths.append(len(full_sequence) - 1)
+            result.to_fridge_sequence_lengths.append(len(to_fridge_sequence) - 1)
+            result.return_sequence_lengths.append(len(return_sequence) - 1)
+            result.middle_sequence_lengths.append(len(seg_fridge_door) - 1)
         
         return result.__dict__
-    
 
     def _sample_audio_paths(self, task: PathSamplingTask) -> Dict:
-        """Sample paths for audio evidence."""
-        
-        sequences_p1, sequences_p2, sequences_p3, sequences_fridge_to_start = task.simple_path_sequences
-        candidate_paths_to_fridge = sequences_p1
-        candidate_paths_from_fridge = sequences_fridge_to_start
-        
-        # Group paths by length and calculate utilities
-        length_pair_metadata, probabilities = calculate_audio_utilities(task, candidate_paths_to_fridge, candidate_paths_from_fridge)
-        
-        # Group paths for efficient sampling
-        paths_by_len_to, paths_by_len_from = group_paths_by_length(
-            candidate_paths_to_fridge, candidate_paths_from_fridge
-        )
-        
-        # Sample paths
-        result = SamplingResult([], [], [], [], [], [], [], [])
-        
+        """Samples paths for audio evidence scenarios."""
+        p_start_door, p_door_fridge, \
+        p_fridge_door, p_door_start = task.simple_path_sequences
+
+        result = SamplingResult([], [], [], [], [], [], [], [], [], [])
+
+        paths_to_fridge = [p1[:-1] + p2 for p1 in p_start_door for p2 in p_door_fridge]
+        paths_from_fridge = [p3[:-1] + p4 for p3 in p_fridge_door for p4 in p_door_start]
+
+        # Use the efficient, length-based utility calculation
+        length_pair_metadata, probabilities = calculate_audio_utilities(task, paths_to_fridge, paths_from_fridge)
+
+        # Group actual paths by length for quick lookup after sampling a length
+        paths_by_len_to = group_paths_by_length(paths_to_fridge)
+        paths_by_len_from = group_paths_by_length(paths_from_fridge)
+
         for _ in range(task.num_sample_paths):
-            # Choose length pair based on utility
+            # Sample a pair of path lengths based on the calculated probabilities
             chosen_idx = np.random.choice(len(length_pair_metadata), p=probabilities)
             chosen_meta = length_pair_metadata[chosen_idx]
-            
             selected_len_to = chosen_meta['eval_steps_to']
             selected_len_from = chosen_meta['eval_steps_from']
             
-            # Sample actual paths with chosen lengths
-            p_to_seq, p_from_seq = sample_paths_with_lengths(
-                paths_by_len_to, paths_by_len_from, selected_len_to, selected_len_from
-            )
+            # Randomly select an actual path that has the chosen length
+            to_fridge_options = paths_by_len_to.get(selected_len_to, [])
+            from_fridge_options = paths_by_len_from.get(selected_len_from, [])
             
-            # Combine paths and create audio signature
-            full_sequence = p_to_seq[:-1] + p_from_seq if p_to_seq and p_from_seq else []
+            if not to_fridge_options or not from_fridge_options:
+                self.logger.warning(f"No paths found for sampled lengths to:{selected_len_to}, from:{selected_len_from}. Skipping sample.")
+                continue
+
+            to_fridge_sequence = to_fridge_options[np.random.randint(0, len(to_fridge_options))]
+            return_sequence = from_fridge_options[np.random.randint(0, len(from_fridge_options))]
+            
+            # Assemble and save the results
+            full_sequence = to_fridge_sequence[:-1] + return_sequence
+
+            seg_fridge_door = next(p for p in p_fridge_door if tuple(return_sequence[:len(p)]) == tuple(p))
+
             compressed_audio = get_compressed_audio_from_path(task.world, full_sequence)
             
-            # Validate audio format
-            if not is_valid_audio_sequence(compressed_audio):
-                self.logger.warning(f"Agent {task.agent_id} ({task.agent_type}) AUDIO: Malformed compressed audio. Storing as None.")
-                compressed_audio = None
-            
-            # Store results
             result.full_sequences.append(full_sequence)
-            result.to_fridge_sequences.append(p_to_seq)
-            result.middle_sequences.append(p_from_seq)  # For audio, middle = from_fridge
+            result.to_fridge_sequences.append(to_fridge_sequence)
+            result.return_sequences.append(return_sequence)
+            result.middle_sequences.append(seg_fridge_door)
             result.audio_sequences.append(compressed_audio)
             
-            # Calculate lengths
-            result.full_sequence_lengths.append(len(full_sequence) - 1 if full_sequence else 0)
-            result.to_fridge_sequence_lengths.append(len(p_to_seq) - 1 if p_to_seq else 0)
-            result.middle_sequence_lengths.append(len(p_from_seq) - 1 if p_from_seq else 0)
-        
+            result.full_sequence_lengths.append(len(full_sequence) - 1)
+            result.to_fridge_sequence_lengths.append(len(to_fridge_sequence) - 1)
+            result.return_sequence_lengths.append(len(return_sequence) - 1)
+            result.middle_sequence_lengths.append(len(seg_fridge_door) - 1)
+            
         return result.__dict__
-    
 
-    def _calculate_visual_utilities(
-        self,
-        task: PathSamplingTask,
-        sequences_p2: List
-    ) -> Tuple[np.ndarray, List]:
-        """Calculate utilities for visual path segments (P2: Fridge->Door)."""
-        
-        # Calculate length-based utilities
-        middle_path_lengths = np.array([len(seq) for seq in sequences_p2])
-        
-        min_len, max_len = np.min(middle_path_lengths), np.max(middle_path_lengths)
-        rescaled_lengths = np.zeros_like(middle_path_lengths, dtype=float)
-        if max_len > min_len:
-            rescaled_lengths = (middle_path_lengths - min_len) / (max_len - min_len)
-        
-        optimal_plant_spots = [None] * len(sequences_p2)
-        utilities = []
-        
-        if task.agent_type == 'sophisticated':
-            # Calculate optimal plant spots and framing utilities
-            fridge_access_point = task.world.get_fridge_access_point()
-            for idx, p2_seq in enumerate(sequences_p2):
-                optimal_spot, best_slider = calculate_optimal_plant_spot_and_slider(
-                    task.world, task.agent_id, p2_seq, fridge_access_point, task.config
-                )
-                optimal_plant_spots[idx] = optimal_spot
-                
-                path_framing_metric_scaled = best_slider / 100.0  # [-0.5, 0.5]
-                utility_factor = task.config.sampling.cost_weight * (1 - rescaled_lengths[idx])
-                
-                if task.agent_id == 'A':
-                    utility = utility_factor + (1 - task.config.sampling.cost_weight) * path_framing_metric_scaled
-                else:
-                    utility = utility_factor - (1 - task.config.sampling.cost_weight) * path_framing_metric_scaled
-                utilities.append(utility)
-        
-        elif task.agent_type in ['naive', 'uniform']:
-            # Simple cost-based utilities
-            for l_rescaled in rescaled_lengths:
-                utilities.append(task.config.sampling.cost_weight * (1 - l_rescaled))
-        
-        return np.array(utilities), optimal_plant_spots 
-    

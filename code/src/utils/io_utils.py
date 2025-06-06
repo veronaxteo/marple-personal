@@ -1,10 +1,30 @@
+"""
+I/O utilities for data handling, including loading/saving JSON, CSV, and caching.
+"""
+
 import os
 import json
 import pandas as pd
-import numpy as np
 import logging
+from typing import Dict
+import numpy as np
+from src.cfg import SimulationConfig
 import datetime
 
+logger = logging.getLogger(__name__)
+
+
+def load_json(file_path: str) -> Dict:
+    """Load JSON data from a file."""
+    try:
+        with open(file_path, 'r') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        logger.error(f"File not found: {file_path}")
+        return {}
+    except json.JSONDecodeError:
+        logger.error(f"Error decoding JSON from file: {file_path}")
+        return {}
 
 def get_json_files(trial):
     """Get JSON files for trials from various possible locations."""
@@ -60,37 +80,84 @@ def create_param_dir(log_dir, trial_name, w=0, naive_temp=0, soph_temp=0, max_st
     return param_log_dir
 
 
-def save_sampled_paths_to_csv(sampled_data, trial_name, param_log_dir, agent_type):
-    """Saves the sampled paths to a CSV file."""
-    logger = logging.getLogger(__name__)
-    paths_data_to_save = []
+def save_json(data: Dict, file_path: str, indent: int = 4):
+    """Save data to a JSON file."""
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    with open(file_path, 'w') as f:
+        json.dump(data, f, indent=indent)
 
-    for agent in ['A', 'B']:
-        agent_path_list = sampled_data.get(agent)
-        if not agent_path_list:
-            logger.warning(f"No data for agent {agent} ({agent_type}) in {trial_name}.")
+
+def load_world_config(world_name: str) -> Dict:
+    """Load world configuration from a JSON file."""
+    file_path = os.path.join('worlds', f"{world_name}.json")
+    return load_json(file_path)
+
+
+def load_human_data(trial_name: str) -> Dict:
+    """Load human data for a specific trial."""
+    # Assuming human data is stored in a structured way, e.g., data/human/{trial_name}.json
+    file_path = os.path.join('data', 'human', f"{trial_name}.json")
+    return load_json(file_path)
+
+
+def save_simulation_config(config: SimulationConfig, log_dir: str):
+    """Save simulation configuration to a JSON file in the log directory."""
+    metadata = {
+        'simulation_config': config.dict()
+    }
+    file_path = os.path.join(log_dir, 'metadata.json')
+    save_json(metadata, file_path)
+
+
+def save_sampled_paths_to_csv(sampled_paths_by_agent: Dict, trial_name: str, log_dir: str, agent_level: str):
+    """Save sampled path data from multiple agents to a single CSV file."""
+    if not sampled_paths_by_agent:
+        logger.warning(f"No sampled paths to save for {trial_name} ({agent_level})")
+        return
+        
+    log_path = os.path.join(log_dir, f"{trial_name}_sampled_paths_{agent_level}.csv")
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    
+    all_rows = []
+    
+    for agent_id, sampled_paths in sampled_paths_by_agent.items():
+        if not isinstance(sampled_paths, dict):
+            logger.warning(f"Unexpected data format for agent {agent_id} in save_sampled_paths_to_csv. Skipping.")
             continue
 
-        for path_data in agent_path_list:
-            paths_data_to_save.append({
-                'trial': trial_name,
-                'agent': agent,
-                'agent_type': agent_type,
-                'path_grid': "N/A",  # path_str logic removed for simplicity
-                'full_sequence': str(path_data.get('full_sequence', [])),
-                'middle_sequence': str(path_data.get('middle_sequence', [])),
-                'to_fridge_sequence': str(path_data.get('to_fridge_sequence', [])),
-                'chosen_plant_spot': str(path_data.get('chosen_plant_spot')) if agent_type == 'sophisticated' else "N/A",
-                'audio_sequence_compressed': "N/A", # audio_seq_str logic removed
-                'full_sequence_length': path_data.get('full_sequence_length', -1),
-                'to_fridge_sequence_length': path_data.get('to_fridge_sequence_length', -1),
-                'middle_sequence_length': path_data.get('middle_sequence_length', -1)
-            })
+        full_sequences = sampled_paths.get('full_sequences', [])
+        to_fridge_sequences = sampled_paths.get('to_fridge_sequences', [])
+        return_sequences = sampled_paths.get('return_sequences', [])
+        chosen_plant_spots = sampled_paths.get('chosen_plant_spots', [])
+        audio_sequences = sampled_paths.get('audio_sequences', [])
+        full_sequence_lengths = sampled_paths.get('full_sequence_lengths', [])
+        to_fridge_sequence_lengths = sampled_paths.get('to_fridge_sequence_lengths', [])
+        return_sequence_lengths = sampled_paths.get('return_sequence_lengths', [])
 
-    df = pd.DataFrame(paths_data_to_save)
-    csv_path = os.path.join(param_log_dir, f'{trial_name}_sampled_paths_{agent_type}.csv')
-    df.to_csv(csv_path, index=False)
-    logger.info(f"Saved {len(df)} sampled path records to {csv_path}")
+        num_paths = len(full_sequences)
+
+        for i in range(num_paths):
+            row = {
+                'trial_name': trial_name,
+                'agent_level': agent_level,
+                'agent_id': agent_id,
+                'full_sequence': str(full_sequences[i]) if i < len(full_sequences) else '',
+                'to_fridge_sequence': str(to_fridge_sequences[i]) if i < len(to_fridge_sequences) else '',
+                'return_sequence': str(return_sequences[i]) if i < len(return_sequences) else '',
+                'chosen_plant_spot': str(chosen_plant_spots[i]) if i < len(chosen_plant_spots) else None,
+                'audio_sequence': str(audio_sequences[i]) if i < len(audio_sequences) else None,
+                'full_sequence_length': full_sequence_lengths[i] if i < len(full_sequence_lengths) else 0,
+                'to_fridge_sequence_length': to_fridge_sequence_lengths[i] if i < len(to_fridge_sequence_lengths) else 0,
+                'return_sequence_length': return_sequence_lengths[i] if i < len(return_sequence_lengths) else 0,
+            }
+            all_rows.append(row)
+
+    if all_rows:
+        df = pd.DataFrame(all_rows)
+        df.to_csv(log_path, index=False)
+        logger.info(f"Saved {len(all_rows)} sampled paths to {log_path}")
+    else:
+        logger.warning(f"No data rows were generated to save for {trial_name} ({agent_level})")
 
 
 def save_grid_to_json(grid, filename):

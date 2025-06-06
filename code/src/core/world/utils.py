@@ -31,9 +31,9 @@ def load_or_compute_simple_path_sequences(
     logger.info(f"Computing simple path sequences for {trial_name} (max_steps={max_steps})")
     
     paths_A = compute_agent_path_sequences('A', world.world_graph, world.geometry, 
-                                         world.start_coords, world.mission, max_steps)
+                                         world.start_coords, max_steps)
     paths_B = compute_agent_path_sequences('B', world.world_graph, world.geometry, 
-                                         world.start_coords, world.mission, max_steps)
+                                         world.start_coords, max_steps)
     
     # Save results to cache
     cache_dir.mkdir(parents=True, exist_ok=True)

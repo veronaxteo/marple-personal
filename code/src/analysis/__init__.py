@@ -1,9 +1,8 @@
 """
-Analysis module for simulation visualization and evaluation.
+Analysis module for simulation visualization.
 
 This module provides:
 - plot: Core plotting functionality for heatmaps and visualizations
-- evaluate: Analysis functions for path lengths and prediction evaluation
 """
 
 from .plot import (
@@ -15,14 +14,6 @@ from .plot import (
     create_simulation_plots
 )
 
-from .evaluate import (
-    extract_params_from_path,
-    get_evidence_type_from_metadata,
-    calculate_avg_path_lengths,
-    analyze_gt_audio_lengths_vs_predictions,
-    consolidate_evaluation_results
-)
-
 
 __all__ = [
     # Plotting functions
@@ -31,12 +22,5 @@ __all__ = [
     'create_summary_plots',
     'plot_detective_predictions_heatmap',
     'plot_suspect_crumb_planting_heatmap',
-    'create_simulation_plots',
-    
-    # Evaluation functions  
-    'extract_params_from_path',
-    'get_evidence_type_from_metadata',
-    'calculate_avg_path_lengths',
-    'analyze_gt_audio_lengths_vs_predictions',
-    'consolidate_evaluation_results',
+    'create_simulation_plots'
 ] 

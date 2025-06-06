@@ -10,8 +10,56 @@ import logging
 from typing import Dict, List, Tuple, Optional, Set
 
 from src.utils.math_utils import softmax_list_vals, normalized_slider_prediction
-from src.core.evidence import single_segment_audio_likelihood
+from src.core.evidence.audio import single_segment_audio_likelihood
 from src.cfg import SimulationConfig, PathSamplingTask
+
+
+def calculate_visual_utilities(task: PathSamplingTask, sequences_p2: List) -> Tuple[np.ndarray, List]:
+    """Calculate utilities for visual path segments (P2: Fridge->Door)."""
+    middle_path_lengths = np.array([len(seq) for seq in sequences_p2])
+    
+    min_len = np.min(middle_path_lengths) if len(middle_path_lengths) > 0 else 0
+    max_len = np.max(middle_path_lengths) if len(middle_path_lengths) > 0 else 0
+    rescaled_lengths = np.zeros_like(middle_path_lengths, dtype=float)
+    if max_len > min_len:
+        rescaled_lengths = (middle_path_lengths - min_len) / (max_len - min_len)
+    
+    optimal_plant_spots = [None] * len(sequences_p2)
+    utilities = []
+    
+    if task.agent_type == 'sophisticated':
+        fridge_access_point = task.world.get_fridge_access_point()
+        for idx, p2_seq in enumerate(sequences_p2):
+            optimal_spot, best_slider = calculate_optimal_plant_spot_and_slider(
+                task.world, task.agent_id, p2_seq, fridge_access_point, task.config
+            )
+            optimal_plant_spots[idx] = optimal_spot
+            
+            path_framing_metric_scaled = best_slider / 100.0
+            utility_factor = task.config.sampling.cost_weight * (1 - rescaled_lengths[idx])
+            
+            if task.agent_id == 'A':
+                utility = utility_factor + (1 - task.config.sampling.cost_weight) * path_framing_metric_scaled
+            else:
+                utility = utility_factor - (1 - task.config.sampling.cost_weight) * path_framing_metric_scaled
+            utilities.append(utility)
+    
+    elif task.agent_type in ['naive', 'uniform']:
+        # Naive agents just prefer shorter paths (higher utility for lower cost)
+        utilities = [1.0 - l for l in rescaled_lengths]
+    
+    return np.array(utilities), optimal_plant_spots
+
+
+def group_paths_by_length(paths: List) -> Dict[int, List]:
+    """Groups a list of paths by their length."""
+    paths_by_len = {}
+    for path in paths:
+        length = len(path) - 1 if path else 0
+        if length not in paths_by_len:
+            paths_by_len[length] = []
+        paths_by_len[length].append(path)
+    return paths_by_len
 
 
 def calculate_audio_utilities(
@@ -19,39 +67,37 @@ def calculate_audio_utilities(
     candidate_paths_to_fridge: List,
     candidate_paths_from_fridge: List
 ) -> Tuple[List[Dict], np.ndarray]:
-    """Calculate utilities for audio path length pairs."""
+    """Calculate utilities for audio path length pairs efficiently."""
     
-    # Group paths by length
-    paths_by_len_to, paths_by_len_from = group_paths_by_length(candidate_paths_to_fridge, candidate_paths_from_fridge)
+    paths_by_len_to = group_paths_by_length(candidate_paths_to_fridge)
+    paths_by_len_from = group_paths_by_length(candidate_paths_from_fridge)
     
-    # Create length pair metadata
-    length_pair_metadata = []
     unique_lengths_to = sorted(paths_by_len_to.keys())
     unique_lengths_from = sorted(paths_by_len_from.keys())
     
+    length_pair_metadata = []
+    # Create metadata for each valid pair of lengths
     for len_to in unique_lengths_to:
         for len_from in unique_lengths_from:
-            if paths_by_len_to[len_to] and paths_by_len_from[len_from]:
-                length_pair_metadata.append({
-                    'eval_steps_to': len_to,
-                    'eval_steps_from': len_from,
-                    'num_paths_to': len(paths_by_len_to[len_to]),
-                    'num_paths_from': len(paths_by_len_from[len_from])
-                })
+            length_pair_metadata.append({
+                'eval_steps_to': len_to,
+                'eval_steps_from': len_from,
+            })
     
-    # Calculate costs and utilities
+    if not length_pair_metadata:
+        return [], np.array([])
+
+    # Calculate costs and utilities for each length pair
     lengths_combined = np.array([[m['eval_steps_to'], m['eval_steps_from']] for m in length_pair_metadata])
     costs = np.sum(lengths_combined, axis=1)
     rescaled_costs = rescale_costs(costs)
     
-    utilities = []
-    for i, length_meta in enumerate(length_pair_metadata):
-        utility = calculate_single_audio_utility(length_meta, rescaled_costs[i], task)
-        utilities.append(utility)
+    utilities = [
+        calculate_single_audio_utility(length_meta, rescaled_costs[i], task)
+        for i, length_meta in enumerate(length_pair_metadata)
+    ]
     
-    # Convert to probabilities
     probabilities = utilities_to_probabilities(np.array(utilities), task)
-    
     return length_pair_metadata, probabilities
 
 
@@ -66,26 +112,22 @@ def calculate_single_audio_utility(
         eval_steps_to = length_meta['eval_steps_to']
         eval_steps_from = length_meta['eval_steps_from']
         
-        # Calculate framing likelihoods using cached computation
         likelihood_A, likelihood_B = compute_audio_framing_likelihoods(eval_steps_to, eval_steps_from, task.config)
         
-        # Calculate framing metric
         framing_metric = normalized_slider_prediction(likelihood_A, likelihood_B)
         framing_metric_scaled = framing_metric / 100.0 
         
-        # Calculate utility based on agent perspective
         cost_factor = task.config.sampling.cost_weight * (1 - rescaled_cost)
         framing_factor = (1 - task.config.sampling.cost_weight) * framing_metric_scaled
         
         if task.agent_id == 'A':
             utility = cost_factor + framing_factor
-        else:  # Agent B
+        else:
             utility = cost_factor - framing_factor
         
         return utility
     
     elif task.agent_type in ['naive', 'uniform']:
-        # Only consider cost for naive/uniform agents
         return task.config.sampling.cost_weight * (1 - rescaled_cost)
 
 
@@ -100,7 +142,6 @@ def compute_audio_framing_likelihoods(
     """
     logger = logging.getLogger(__name__)
     
-    # Use naive agent model distributions if available
     naive_A_to_steps = getattr(config.evidence, 'naive_A_to_fridge_steps_model', [])
     naive_A_from_steps = getattr(config.evidence, 'naive_A_from_fridge_steps_model', [])
     naive_B_to_steps = getattr(config.evidence, 'naive_B_to_fridge_steps_model', [])
@@ -108,66 +149,19 @@ def compute_audio_framing_likelihoods(
     
     sigma_factor = config.evidence.audio_similarity_sigma
     
-    # Calculate likelihoods for Agent A
     likelihood_A_to = sum(single_segment_audio_likelihood(eval_steps_to, step, sigma_factor) 
-                         for step in naive_A_to_steps) / len(naive_A_to_steps)
+                         for step in naive_A_to_steps) / len(naive_A_to_steps) if naive_A_to_steps else 0
     likelihood_A_from = sum(single_segment_audio_likelihood(eval_steps_from, step, sigma_factor) 
-                           for step in naive_A_from_steps) / len(naive_A_from_steps)
+                           for step in naive_A_from_steps) / len(naive_A_from_steps) if naive_A_from_steps else 0
     likelihood_A = likelihood_A_to * likelihood_A_from
     
-    # Calculate likelihoods for Agent B
     likelihood_B_to = sum(single_segment_audio_likelihood(eval_steps_to, step, sigma_factor) 
-                         for step in naive_B_to_steps) / len(naive_B_to_steps)
+                         for step in naive_B_to_steps) / len(naive_B_to_steps) if naive_B_to_steps else 0
     likelihood_B_from = sum(single_segment_audio_likelihood(eval_steps_from, step, sigma_factor) 
-                           for step in naive_B_from_steps) / len(naive_B_from_steps)
+                           for step in naive_B_from_steps) / len(naive_B_from_steps) if naive_B_from_steps else 0
     likelihood_B = likelihood_B_to * likelihood_B_from
     
     return likelihood_A, likelihood_B
-
-
-def group_paths_by_length(
-    candidate_paths_to_fridge: List,
-    candidate_paths_from_fridge: List
-) -> Tuple[Dict[int, List], Dict[int, List]]:
-    """Group paths by their length for efficient sampling."""
-    
-    paths_by_len_to = {}
-    for path in candidate_paths_to_fridge:
-        length = len(path) - 1 if path else 0 
-        if length not in paths_by_len_to:
-            paths_by_len_to[length] = []
-        paths_by_len_to[length].append(path)
-    
-    paths_by_len_from = {}
-    for path in candidate_paths_from_fridge:
-        length = len(path) - 1 if path else 0
-        if length not in paths_by_len_from:
-            paths_by_len_from[length] = []
-        paths_by_len_from[length].append(path)
-    
-    return paths_by_len_to, paths_by_len_from
-
-
-def sample_paths_with_lengths(
-    paths_by_len_to: Dict[int, List],
-    paths_by_len_from: Dict[int, List],
-    selected_len_to: int,
-    selected_len_from: int
-) -> Tuple[Optional[List], Optional[List]]:
-    """Sample specific paths with given lengths"""
-    
-    p_to_seq = None
-    p_from_seq = None
-    
-    if selected_len_to in paths_by_len_to and paths_by_len_to[selected_len_to]:
-        idx = np.random.choice(len(paths_by_len_to[selected_len_to]))
-        p_to_seq = paths_by_len_to[selected_len_to][idx]
-    
-    if selected_len_from in paths_by_len_from and paths_by_len_from[selected_len_from]:
-        idx = np.random.choice(len(paths_by_len_from[selected_len_from]))
-        p_from_seq = paths_by_len_from[selected_len_from][idx]
-    
-    return p_to_seq, p_from_seq
 
 
 def utilities_to_probabilities(
@@ -180,13 +174,16 @@ def utilities_to_probabilities(
         temperature = task.config.sampling.sophisticated_temp
     elif task.agent_type == 'naive':
         temperature = task.config.sampling.naive_temp
-    else:  # TODO: what to do for uniform?
+    else:
         temperature = task.config.sampling.naive_temp
     
+    if len(utilities) == 0:
+        return np.array([])
+
     if temperature <= 0:
-        # Deterministic selection of highest utility
-        probabilities = np.zeros_like(utilities)
-        probabilities[np.argmax(utilities)] = 1.0
+        probabilities = np.zeros_like(utilities, dtype=float)
+        if len(probabilities) > 0:
+            probabilities[np.argmax(utilities)] = 1.0
         return probabilities
     
     return softmax_list_vals(utilities, temperature)
@@ -195,11 +192,11 @@ def utilities_to_probabilities(
 def rescale_costs(costs: np.ndarray) -> np.ndarray:
     """Rescale costs to [0, 1] range."""
     if len(costs) <= 1:
-        return np.zeros_like(costs)
+        return np.zeros_like(costs, dtype=float)
     
     min_cost, max_cost = np.min(costs), np.max(costs)
     if max_cost == min_cost:
-        return np.zeros_like(costs)
+        return np.zeros_like(costs, dtype=float)
     
     return (costs - min_cost) / (max_cost - min_cost)
 
@@ -217,12 +214,8 @@ def calculate_optimal_plant_spot_and_slider(
     """
     logger = logging.getLogger(__name__)
     
-    best_slider = 0
-    best_coord = None
-    
-    # Get valid kitchen coordinates from the path (excluding doors and fridge)
     valid_coords = []
-    for coord in p2_seq[1:-1]:  # Exclude start and end points
+    for coord in p2_seq[1:-1]:
         if coord in world.world_graph.node_to_vid:
             vid = world.world_graph.node_to_vid[coord]
             node_attrs = world.world_graph.igraph.vs[vid]
@@ -232,25 +225,32 @@ def calculate_optimal_plant_spot_and_slider(
             if is_kitchen and not is_door and coord != fridge_access_point:
                 valid_coords.append(coord)
     
-    # Evaluate each potential plant spot
-    for coord in valid_coords:
-        # Use naive agent models if available for sophisticated agent framing calculation
-        naive_A_visual_map = getattr(config.evidence, 'naive_A_visual_likelihoods_map', {})
-        naive_B_visual_map = getattr(config.evidence, 'naive_B_visual_likelihoods_map', {})
+    if not valid_coords:
+        return None, 0.0
+
+    naive_A_visual_map = getattr(config.evidence, 'naive_A_visual_likelihoods_map', {})
+    naive_B_visual_map = getattr(config.evidence, 'naive_B_visual_likelihoods_map', {})
+
+    if not naive_A_visual_map or not naive_B_visual_map:
+        logger.warning(f"Naive agent visual likelihoods not available for sophisticated agent. Cannot choose optimal plant spot.")
+        return None, 0.0
+
+    slider_values = {
+        coord: normalized_slider_prediction(
+            naive_A_visual_map.get(coord, 0),
+            naive_B_visual_map.get(coord, 0)
+        ) for coord in valid_coords
+    }
+
+    if not slider_values:
+        return None, 0.0
+
+    if agent_id == 'A':
+        best_coord = max(slider_values, key=slider_values.get)
+    else:
+        best_coord = min(slider_values, key=slider_values.get)
         
-        # Sophisticated suspect
-        if naive_A_visual_map and naive_B_visual_map:
-            likelihood_A = naive_A_visual_map.get(coord, 0)
-            likelihood_B = naive_B_visual_map.get(coord, 0)
-            slider_value = normalized_slider_prediction(likelihood_A, likelihood_B)
-        else:
-            logger.warning(f"Naive agent visual likelihoods not available for sophisticated agent, exiting.")
-            exit(1)
-        
-        if (agent_id == 'A' and slider_value > best_slider) or \
-            (agent_id == 'B' and slider_value < best_slider):
-            best_slider = slider_value
-            best_coord = coord
+    best_slider = slider_values[best_coord]
     
     return best_coord, best_slider
 
@@ -278,9 +278,11 @@ def get_noisy_plant_spot(optimal_spot: Tuple[int, int],
             if potential_spot in valid_plant_spots:
                 candidate_spots.append(potential_spot)
     
+    if not candidate_spots:
+        return optimal_spot
+
     weights = []
     for spot in candidate_spots:
-        # Gaussian weight based on distance from optimal spot
         distance_sq = (spot[0] - optimal_spot[0])**2 + (spot[1] - optimal_spot[1])**2
         weight = np.exp(-distance_sq / (2 * (sigma**2 + 1e-6))) 
         weights.append(weight)
@@ -290,7 +292,7 @@ def get_noisy_plant_spot(optimal_spot: Tuple[int, int],
         logger.warning(f"All Gaussian weights are zero for {optimal_spot} with sigma {sigma}. Returning optimal_spot.")
         if optimal_spot in candidate_spots:
             return optimal_spot
-        return candidate_spots[0] if candidate_spots else optimal_spot
+        return candidate_spots[0]
 
     probabilities = np.array(weights) / sum_weights
     
@@ -298,7 +300,6 @@ def get_noisy_plant_spot(optimal_spot: Tuple[int, int],
     return candidate_spots[selected_idx]
 
 
-# TODO: can remove this in the future
 def is_valid_audio_sequence(audio_seq) -> bool:
     """Validate that audio sequence has correct format"""
     if audio_seq is None:
@@ -307,7 +308,6 @@ def is_valid_audio_sequence(audio_seq) -> bool:
     if not isinstance(audio_seq, list) or len(audio_seq) != 5:
         return False
     
-    # Check format: [steps_to, 'fridge_opened', 'snack_picked_up', 'fridge_closed', steps_from]
     if not isinstance(audio_seq[0], int) or not isinstance(audio_seq[4], int):
         return False
     
@@ -315,4 +315,4 @@ def is_valid_audio_sequence(audio_seq) -> bool:
     if audio_seq[1:4] != expected_events:
         return False
     
-    return True 
+    return True
