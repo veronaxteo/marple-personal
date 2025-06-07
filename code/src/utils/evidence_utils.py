@@ -117,8 +117,10 @@ class VisualEvidenceProcessor(EvidenceProcessor):
                     final_likelihood_map_B = smooth_likelihoods(raw_likelihood_map_B, sigma_steps, neighbors)
                     
                     try:
-                        from src.analysis.plot import plot_smoothing_comparison
-                        plot_smoothing_comparison(task.trial_name, task.param_log_dir, raw_likelihood_map_A, raw_likelihood_map_B, task.world, detective_sigma)
+                        # Only attempt to plot if a logging directory is provided
+                        if task.param_log_dir:
+                            from src.analysis.plot import plot_smoothing_comparison
+                            plot_smoothing_comparison(task.trial_name, task.param_log_dir, raw_likelihood_map_A, raw_likelihood_map_B, task.world, detective_sigma)
                     except ImportError:
                         self.logger.warning("Could not import plot_smoothing_comparison for debugging plots")
         

@@ -11,9 +11,10 @@ from .sampling import PathSampler, SamplingResult
 from .utilities import (
     utilities_to_probabilities,
     rescale_costs,
-    calculate_optimal_plant_spot_and_slider,
     get_noisy_plant_spot,
-    calculate_audio_utilities
+    calculate_audio_utilities,
+    calculate_visual_utilities,
+    calculate_multimodal_utilities
 )
 
 __all__ = [
@@ -24,7 +25,8 @@ __all__ = [
     # Utility functions
     'utilities_to_probabilities',
     'rescale_costs',
-    'calculate_optimal_plant_spot_and_slider',
     'get_noisy_plant_spot',
-    'calculate_audio_utilities'
+    'calculate_audio_utilities',
+    'calculate_visual_utilities',
+    'calculate_multimodal_utilities'
 ] 

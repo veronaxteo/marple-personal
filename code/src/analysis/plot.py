@@ -115,10 +115,7 @@ def plot_suspect_paths_heatmap(trial_name: str, param_log_dir: str, agent_type_t
     plot_height = world.height
     
     csv_file_path = os.path.join(param_log_dir, f"{trial_name}_sampled_paths_{agent_type_to_plot}.csv")
-    if not os.path.exists(csv_file_path):
-        logger.warning(f"CSV file for path plotting not found: {csv_file_path}")
-        return
-        
+
     paths_df = pd.read_csv(csv_file_path)
 
     # Determine which path segment to plot based on user request
@@ -171,6 +168,127 @@ def plot_suspect_paths_heatmap(trial_name: str, param_log_dir: str, agent_type_t
         plt.close()
 
 
+def plot_multimodal_visual_predictions_heatmap(trial_name: str, param_log_dir: str, detective_agent_type: str):
+    """Plots the visual component of multimodal detective predictions by averaging over audio sequences."""
+    logger = logging.getLogger(__name__)
+    plots_dir = os.path.join(param_log_dir, 'plots')
+    os.makedirs(plots_dir, exist_ok=True)
+    
+    predictions_file = os.path.join(param_log_dir, f"{trial_name}_{detective_agent_type}_multimodal_predictions.json")
+    if not os.path.exists(predictions_file):
+        logger.warning(f"Multimodal predictions file not found: {predictions_file}")
+        return
+
+    with open(predictions_file, 'r') as f:
+        data = json.load(f)
+
+    predictions_data = data.get('predictions', [])
+    if not predictions_data:
+        logger.warning(f"No predictions found in {predictions_file}")
+        return
+
+    # Aggregate predictions by crumb coordinate
+    visual_predictions = {}
+    for pred_entry in predictions_data:
+        coord = tuple(pred_entry['crumb_coord'])
+        prediction = pred_entry['prediction']
+        if coord not in visual_predictions:
+            visual_predictions[coord] = []
+        visual_predictions[coord].append(prediction)
+
+    # Average the predictions for each coordinate
+    averaged_visual_predictions = {coord: np.mean(preds) for coord, preds in visual_predictions.items()}
+
+    trial_file_name = f"{trial_name}_A1.json"
+    world = World.initialize_world_start(trial_file_name)
+    plot_width = world.width
+    plot_height = world.height
+    heatmap_grid = np.full((plot_height, plot_width), np.nan)
+    
+    for coord, avg_pred in averaged_visual_predictions.items():
+        world_x, world_y = coord
+        if 0 <= world_x < plot_width and 0 <= world_y < plot_height:
+            heatmap_grid[world_y, world_x] = avg_pred
+
+    plt.figure(figsize=(14, 10))
+    sns.heatmap(heatmap_grid, annot=True, fmt=".1f", cmap="coolwarm", center=0, cbar=True, 
+                vmin=-50, vmax=50, linewidths=.5, linecolor='gray')
+    plt.title(f"Detective Predictions (Visual Component of Multimodal) - {detective_agent_type.capitalize()}\n"
+              f"Trial: {trial_name}, Slider: (-50: A, 50: B)")
+    plt.xlabel("Apartment X Coordinate")
+    plt.ylabel("Apartment Y Coordinate")
+    
+    plt.xticks(ticks=np.arange(0.5, plot_width, 1), labels=np.arange(0, plot_width))
+    plt.yticks(ticks=np.arange(0.5, plot_height, 1), labels=np.arange(0, plot_height))
+    
+    heatmap_filename = os.path.join(plots_dir, f"detective_multimodal_visual_preds_heatmap_{detective_agent_type}_{trial_name}.png")
+    plt.savefig(heatmap_filename, dpi=150, bbox_inches='tight')
+    logger.info(f"Saved multimodal visual predictions heatmap to {heatmap_filename}")
+    plt.close()
+
+
+def plot_multimodal_audio_predictions_heatmap(trial_name: str, param_log_dir: str, detective_agent_type: str):
+    """Plots the audio component of multimodal detective predictions by averaging over crumb locations."""
+    logger = logging.getLogger(__name__)
+    plots_dir = os.path.join(param_log_dir, 'plots')
+    os.makedirs(plots_dir, exist_ok=True)
+    
+    predictions_file = os.path.join(param_log_dir, f"{trial_name}_{detective_agent_type}_multimodal_predictions.json")
+
+    with open(predictions_file, 'r') as f:
+        data = json.load(f)
+
+    predictions_data = data.get('predictions', [])
+
+    # Aggregate predictions by audio sequence length
+    audio_predictions = {}
+    for pred_entry in predictions_data:
+        gt_sequence = pred_entry.get('gt_sequence', [])
+        prediction = pred_entry.get('prediction')
+        if len(gt_sequence) >= 5 and prediction is not None:
+            len_key = (gt_sequence[0], gt_sequence[-1])
+            if len_key not in audio_predictions:
+                audio_predictions[len_key] = []
+            audio_predictions[len_key].append(prediction)
+
+    # Average the predictions for each audio length pair
+    averaged_audio_predictions = {key: np.mean(preds) for key, preds in audio_predictions.items()}
+
+    to_fridge_lengths = [key[0] for key in averaged_audio_predictions.keys()]
+    from_fridge_lengths = [key[1] for key in averaged_audio_predictions.keys()]
+    unique_to_lengths = sorted(set(to_fridge_lengths))
+    unique_from_lengths = sorted(set(from_fridge_lengths))
+    
+    heatmap_grid = np.full((len(unique_from_lengths), len(unique_to_lengths)), np.nan)
+    
+    to_length_map = {length: i for i, length in enumerate(unique_to_lengths)}
+    from_length_map = {length: i for i, length in enumerate(unique_from_lengths)}
+    
+    for (to_len, from_len), avg_pred in averaged_audio_predictions.items():
+        if to_len in to_length_map and from_len in from_length_map:
+            row = from_length_map[from_len]
+            col = to_length_map[to_len]
+            heatmap_grid[row, col] = avg_pred
+
+    plt.figure(figsize=(12, 10))
+    sns.heatmap(heatmap_grid, annot=True, fmt=".1f", cmap="coolwarm", center=0, cbar=True,
+                vmin=-50, vmax=50, linewidths=0.5, linecolor='gray',
+                xticklabels=unique_to_lengths, yticklabels=unique_from_lengths)
+    
+    plt.title(f"Detective Predictions (Audio Component of Multimodal) - {detective_agent_type.capitalize()}\n"
+              f"Trial: {trial_name}, Slider: (-50: A, +50: B)")
+    plt.xlabel("Sequence Length TO Fridge")
+    plt.ylabel("Sequence Length FROM Fridge")
+    
+    cbar = plt.gca().collections[0].colorbar
+    cbar.set_label('Detective Prediction (-50: A, +50: B)', rotation=270, labelpad=20)
+    
+    heatmap_filename = os.path.join(plots_dir, f"detective_multimodal_audio_preds_heatmap_{detective_agent_type}_{trial_name}.png")
+    plt.savefig(heatmap_filename, dpi=150, bbox_inches='tight')
+    logger.info(f"Saved multimodal audio predictions heatmap to {heatmap_filename}")
+    plt.close()
+
+
 def create_summary_plots(param_log_dir: str, trial_name: str):
     """Create summary plots for a simulation run"""
     logger = logging.getLogger(__name__)
@@ -212,18 +330,11 @@ def plot_detective_predictions_heatmap(trial_name: str, param_log_dir: str, dete
         return
     
     predictions_file = os.path.join(param_log_dir, f"{trial_name}_{detective_agent_type}_{evidence_type}_predictions.json")
-    if not os.path.exists(predictions_file):
-        logger.warning(f"Predictions file not found: {predictions_file}")
-        return
-    
     with open(predictions_file, 'r') as f:
         data = json.load(f)
     
     predictions_data = data.get('predictions', [])
-    if not predictions_data:
-        logger.warning(f"No predictions found in {predictions_file}")
-        return
-    
+
     trial_file_name = f"{trial_name}_A1.json"
     world = World.initialize_world_start(trial_file_name)
     
@@ -276,17 +387,11 @@ def plot_detective_audio_predictions_heatmap(trial_name: str, param_log_dir: str
     os.makedirs(plots_dir, exist_ok=True)
     
     predictions_file = os.path.join(param_log_dir, f"{trial_name}_{detective_agent_type}_audio_predictions.json")
-    if not os.path.exists(predictions_file):
-        logger.warning(f"Audio predictions file not found: {predictions_file}")
-        return
     
     with open(predictions_file, 'r') as f:
         data = json.load(f)
     
     predictions_data = data.get('predictions', [])
-    if not predictions_data:
-        logger.warning(f"No predictions found in {predictions_file}")
-        return
     
     to_fridge_lengths = []
     from_fridge_lengths = []
@@ -359,9 +464,6 @@ def plot_suspect_crumb_planting_heatmap(trial_name: str, param_log_dir: str):
     os.makedirs(plots_dir, exist_ok=True)
     
     csv_file_path = os.path.join(param_log_dir, f"{trial_name}_sampled_paths_sophisticated.csv")
-    if not os.path.exists(csv_file_path):
-        logger.warning(f"Sophisticated paths CSV not found: {csv_file_path}")
-        return
     
     paths_df = pd.read_csv(csv_file_path)
     
@@ -386,10 +488,6 @@ def plot_suspect_crumb_planting_heatmap(trial_name: str, param_log_dir: str):
                         plant_spots_counts[spot_tuple] = plant_spots_counts.get(spot_tuple, 0) + 1
                 except (ValueError, SyntaxError):
                     continue
-        
-        if not plant_spots_counts:
-            logger.warning(f"No valid plant spots found for Agent {agent_id}")
-            continue
         
         heatmap_grid = np.zeros((plot_height, plot_width))
         
@@ -423,28 +521,40 @@ def create_simulation_plots(param_log_dir: str, trial_name: str, evidence_type: 
     
     for agent_type in agent_types:
         csv_path = os.path.join(param_log_dir, f"{trial_name}_sampled_paths_{agent_type}.csv")
-        if os.path.exists(csv_path):
-            # Plot path heatmaps regardless of evidence type, using the new columns
-            for path_segment_type in path_segments:
-                try:
-                    # Pass a dummy evidence_type as it's no longer needed for path selection
+        for path_segment_type in path_segments:
+            try:
                     plot_suspect_paths_heatmap(trial_name, param_log_dir, agent_type, 
                                              'visual', path_segment_type)
-                except Exception as e:
-                    logger.warning(f"Could not create {path_segment_type} plot for {agent_type}: {e}")
-        else:
-            logger.warning(f"CSV file not found: {csv_path}")
+            except Exception as e:
+                logger.warning(f"Could not create {path_segment_type} plot for {agent_type}: {e}")
     
-    if evidence_type == 'visual':
+    if evidence_type in ['visual', 'multimodal']:
         try:
             plot_suspect_crumb_planting_heatmap(trial_name, param_log_dir)
         except Exception as e:
             logger.warning(f"Could not create crumb planting heatmap: {e}")
     
     for agent_type in ['naive', 'sophisticated']:
-        try:
-            plot_detective_predictions_heatmap(trial_name, param_log_dir, agent_type, evidence_type)
-        except Exception as e:
-            logger.warning(f"Could not create detective predictions plot for {agent_type}: {e}")
-    
+        if evidence_type == 'multimodal':
+            try:
+                plot_multimodal_visual_predictions_heatmap(trial_name, param_log_dir, agent_type)
+            except Exception as e:
+                logger.warning(f"Could not create multimodal visual predictions plot for {agent_type}: {e}")
+            try:
+                plot_multimodal_audio_predictions_heatmap(trial_name, param_log_dir, agent_type)
+            except Exception as e:
+                logger.warning(f"Could not create multimodal audio predictions plot for {agent_type}: {e}")
+        
+        elif evidence_type == 'visual':
+            try:
+                plot_detective_predictions_heatmap(trial_name, param_log_dir, agent_type, evidence_type='visual')
+            except Exception as e:
+                logger.warning(f"Could not create visual detective predictions plot for {agent_type}: {e}")
+
+        elif evidence_type == 'audio':
+            try:
+                plot_detective_audio_predictions_heatmap(trial_name, param_log_dir, agent_type)
+            except Exception as e:
+                logger.warning(f"Could not create audio detective predictions plot for {agent_type}: {e}")
+
     logger.info(f"Completed {evidence_type} evidence plots for {trial_name}")
