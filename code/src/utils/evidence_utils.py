@@ -241,8 +241,7 @@ class AudioEvidenceProcessor(EvidenceProcessor):
 
 
 class MultimodalEvidenceProcessor(EvidenceProcessor):
-    """Processes combined visual and audio evidence"""
-
+    """Processes combined visual and audio evidence."""
     def __init__(self, config: SimulationConfig):
         super().__init__()
         self.config = config
@@ -251,31 +250,69 @@ class MultimodalEvidenceProcessor(EvidenceProcessor):
 
     def compute_detective_predictions(self, task: DetectiveTaskConfig) -> PredictionResult:
         self.logger.info(f"Computing MULTIMODAL detective predictions for {task.agent_type_being_simulated} agents")
-        
-        # Create sub-tasks, ensuring all necessary info is passed down
-        sub_task_info = {
+
+        visual_task_info = {
             'world': task.world,
             'sampled_data': task.sampled_data,
             'agent_type_being_simulated': task.agent_type_being_simulated,
             'trial_name': task.trial_name,
-            'param_log_dir': task.param_log_dir,
+            'param_log_dir': None,
             'config': task.config
         }
+        visual_task = DetectiveTaskConfig(**visual_task_info)
         
-        visual_task = DetectiveTaskConfig(**sub_task_info)
         visual_result = self.visual_processor.compute_detective_predictions(visual_task)
+        visual_model_A = visual_result.model_output_A
+        visual_model_B = visual_result.model_output_B
         
-        audio_task = DetectiveTaskConfig(**sub_task_info)
-        audio_result = self.audio_processor.compute_detective_predictions(audio_task)
+        gt_audio_sequences = generate_ground_truth_audio_sequences(task.world, task.config)
+        
+        agent_A_data = task.sampled_data.get('A', {})
+        agent_B_data = task.sampled_data.get('B', {})
+        agent_A_audio_sequences = agent_A_data.get('audio_sequences', [])
+        agent_B_audio_sequences = agent_B_data.get('audio_sequences', [])
 
-        # Combine results
-        model_A = {'visual': visual_result.model_output_A, 'audio': audio_result.model_output_A}
-        model_B = {'visual': visual_result.model_output_B, 'audio': audio_result.model_output_B}
+        predictions = {}
+        prediction_data = []
         
-        predictions = visual_result.predictions
-        prediction_data = visual_result.prediction_data_for_json
+        possible_crumb_coords = list(visual_model_A.keys())
+
+        for crumb_coord in possible_crumb_coords:
+            for gt_audio_seq in gt_audio_sequences:
+                lik_A_visual = visual_model_A.get(crumb_coord, 0)
+                lik_B_visual = visual_model_B.get(crumb_coord, 0)
+                
+                lik_A_audio = self.audio_processor._calculate_audio_likelihood(gt_audio_seq, agent_A_audio_sequences, task.config)
+                lik_B_audio = self.audio_processor._calculate_audio_likelihood(gt_audio_seq, agent_B_audio_sequences, task.config)
+
+                total_lik_A = lik_A_visual * lik_A_audio
+                total_lik_B = lik_B_visual * lik_B_audio
+
+                prediction = normalized_slider_prediction(total_lik_A, total_lik_B)
+                
+                pred_key = f"crumb_{crumb_coord[0]}_{crumb_coord[1]}_audio_{gt_audio_seq[0]}_{gt_audio_seq[4]}"
+                predictions[pred_key] = prediction
+                
+                prediction_data.append({
+                    'gt_sequence': gt_audio_seq,
+                    'crumb_coord': crumb_coord,
+                    'likelihood_A': total_lik_A,
+                    'likelihood_B': total_lik_B,
+                    'prediction': prediction,
+                    'lik_A_visual': lik_A_visual,
+                    'lik_B_visual': lik_B_visual,
+                    'lik_A_audio': lik_A_audio,
+                    'lik_B_audio': lik_B_audio
+                })
         
-        save_detective_predictions(prediction_data, task)
+        agent_A_to_steps, agent_A_from_steps = self.audio_processor._extract_step_lengths(agent_A_audio_sequences)
+        agent_B_to_steps, agent_B_from_steps = self.audio_processor._extract_step_lengths(agent_B_audio_sequences)
+        
+        model_A = {'visual': visual_model_A, 'audio': (agent_A_to_steps, agent_A_from_steps)}
+        model_B = {'visual': visual_model_B, 'audio': (agent_B_to_steps, agent_B_from_steps)}
+        
+        if task.param_log_dir:
+            save_detective_predictions(prediction_data, task)
 
         return PredictionResult(
             predictions=predictions,

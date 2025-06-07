@@ -28,15 +28,15 @@ class RSMSimulator(BaseSimulator):
 
         # Level 1: Naive agents
         self.logger.info("--- Simulating Level 1 (Naive Agent) ---")
-        
+        # Naive suspect
         naive_suspect_data = suspect.simulate_suspect(world, paths_A, paths_B, 'naive', num_suspect_paths)
         save_sampled_paths_to_csv(naive_suspect_data, trial_name, self.param_log_dir, 'naive')
 
+        # Naive detective
         naive_detective_data = suspect.simulate_suspect(world, paths_A, paths_B, 'naive', num_detective_paths)
-
         naive_detective_result = detective.simulate_detective(world, naive_detective_data, 'naive', trial_name, self.param_log_dir)
-        
         naive_predictions = naive_detective_result['predictions']
+        
         naive_A_model = naive_detective_result['model_output_A'] 
         naive_B_model = naive_detective_result['model_output_B']
 
@@ -46,16 +46,12 @@ class RSMSimulator(BaseSimulator):
         
         # Level 2: Sophisticated agents
         self.logger.info("--- Simulating Level 2 (Sophisticated Agent) ---")
-        
+        # Sophisticated suspect
         soph_suspect_data = suspect.simulate_suspect(world, paths_A, paths_B, 'sophisticated', num_suspect_paths)
         save_sampled_paths_to_csv(soph_suspect_data, trial_name, self.param_log_dir, 'sophisticated')
 
-        # Generate sophisticated detective predictions
-        if num_detective_paths != num_suspect_paths:
-            soph_detective_data = suspect.simulate_suspect(world, paths_A, paths_B, 'sophisticated', num_detective_paths)
-        else:
-            soph_detective_data = soph_suspect_data
-
+        # Sophisticated detective
+        soph_detective_data = suspect.simulate_suspect(world, paths_A, paths_B, 'sophisticated', num_detective_paths)
         soph_detective_result = detective.simulate_detective(world, soph_detective_data, 'sophisticated', trial_name, self.param_log_dir)
         soph_predictions = soph_detective_result['predictions']
 
@@ -94,7 +90,7 @@ class RSMSimulator(BaseSimulator):
                            f"B_to({len(self.config.evidence.naive_B_to_fridge_steps_model)}), "
                            f"B_from({len(self.config.evidence.naive_B_from_fridge_steps_model)})")
 
-        elif self.config.evidence.evidence_type == 'multimodal':            
+        elif self.config.evidence.evidence_type == 'multimodal':
             # Visual component
             naive_A_visual_model = naive_A_model['visual']
             naive_B_visual_model = naive_B_model['visual']

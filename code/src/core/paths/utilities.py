@@ -7,7 +7,8 @@ and probability transformations.
 
 import numpy as np
 import logging
-from typing import Dict, List, Tuple, Optional, Set
+from typing import Dict, List, Tuple, Set
+from multiprocessing import Pool
 
 from src.utils.math_utils import softmax_list_vals, normalized_slider_prediction
 from src.core.evidence.audio import single_segment_audio_likelihood
@@ -73,9 +74,6 @@ def calculate_audio_utilities(
                 'eval_steps_from': len_from,
             })
     
-    if not length_pair_metadata:
-        return [], np.array([])
-
     # Calculate costs and utilities for each length pair
     lengths_combined = np.array([[m['eval_steps_to'], m['eval_steps_from']] for m in length_pair_metadata])
     costs = np.sum(lengths_combined, axis=1)
@@ -174,22 +172,17 @@ def calculate_multimodal_utilities(
         
     return np.array(utilities), all_optimal_spots, path_pairs
 
+
 def calculate_to_fridge_utilities(task: PathSamplingTask, paths_to_fridge: List) -> np.ndarray:
-    """Calculate utilities for the 'to fridge' path segment independently."""
-    if not paths_to_fridge:
-        return np.array([])
+    """Calculate utilities for 'to fridge' paths (grouped by length)."""
+    paths_by_len = group_paths_by_length(paths_to_fridge)
+    unique_lengths = sorted(paths_by_len.keys())
 
-    # Calculate cost based on this segment's length
-    costs = np.array([len(p) - 1 for p in paths_to_fridge])
-    rescaled_costs = rescale_costs(costs)
-
-    # Calculate audio framing based on this segment's length
-    utilities = []
-    for i, p_to in enumerate(paths_to_fridge):
-        len_to = len(p_to) - 1
-        # We assume a "neutral" from_length for this independent calculation, e.g., the average.
-        # A simpler way for this model is to just use the `to` likelihood.
-        likelihood_A, likelihood_B = compute_audio_framing_likelihoods(len_to, 0, task.config)
+    rescaled_costs = rescale_costs(np.array(unique_lengths))
+    
+    utility_by_length = {}
+    for i, length in enumerate(unique_lengths):
+        likelihood_A, likelihood_B = calculate_single_segment_audio_likelihoods(length, 'to', task.config)
         framing_metric = normalized_slider_prediction(likelihood_A, likelihood_B) / 100.0
 
         cost_factor = task.config.sampling.cost_weight * (1 - rescaled_costs[i])
@@ -199,62 +192,75 @@ def calculate_to_fridge_utilities(task: PathSamplingTask, paths_to_fridge: List)
             utility = cost_factor + framing_factor
         else:
             utility = cost_factor - framing_factor
-        utilities.append(utility)
+        utility_by_length[length] = utility
 
-    return np.array(utilities)
+    final_utilities = [utility_by_length[len(p) - 1] for p in paths_to_fridge]
+    return np.array(final_utilities)
+
+
+def _calculate_utility_for_single_from_path(args: Tuple) -> Tuple[float, any]:
+    """
+    Worker function to calculate utility for a single 'from' path.
+    Designed to be called by a multiprocessing Pool.
+    """
+    i, p_from, task, rescaled_costs = args
+    
+    # Unpack task info to avoid passing the whole object if not needed
+    config = task.config
+    agent_id = task.agent_id
+    world = task.world
+    p_fridge_door = task.simple_path_sequences[2]
+
+    # Visual evidence
+    try:
+        fridge_access_point = world.get_fridge_access_point()
+        seg_fridge_door = next(p for p in p_fridge_door if tuple(p_from[:len(p)]) == tuple(p))
+        optimal_spot, _ = calculate_optimal_plant_spot_and_slider(
+            world, agent_id, seg_fridge_door, fridge_access_point, config
+        )
+    except StopIteration:
+        optimal_spot = None
+    
+    naive_A_map = getattr(config.evidence, 'naive_A_visual_likelihoods_map', {})
+    naive_B_map = getattr(config.evidence, 'naive_B_visual_likelihoods_map', {})
+    likelihood_A_visual = naive_A_map.get(optimal_spot, 0)
+    likelihood_B_visual = naive_B_map.get(optimal_spot, 0)
+    framing_metric_visual = normalized_slider_prediction(likelihood_A_visual, likelihood_B_visual) / 100.0
+    
+    # Audio evidence
+    len_from = len(p_from) - 1
+    likelihood_A_audio, likelihood_B_audio = calculate_single_segment_audio_likelihoods(len_from, 'from', config)
+    framing_metric_audio = normalized_slider_prediction(likelihood_A_audio, likelihood_B_audio) / 100.0
+    
+    # Combine 
+    # Average visual and audio framing scores
+    framing_metric = (framing_metric_visual + framing_metric_audio) / 2
+    cost_factor = config.sampling.cost_weight * (1 - rescaled_costs[i])
+    framing_factor = (1 - config.sampling.cost_weight) * framing_metric
+
+    if agent_id == 'A':
+        utility = cost_factor + framing_factor
+    else:
+        utility = cost_factor - framing_factor
+        
+    return utility, optimal_spot
 
 
 def calculate_from_fridge_utilities(task: PathSamplingTask, paths_from_fridge: List) -> Tuple[np.ndarray, List]:
-    """Calculate utilities for the 'from fridge' path segment independently."""
-    if not paths_from_fridge:
-        return np.array([]), []
-
-    # Calculate cost based on this segment's length
+    """
+    Calculate utilities for 'from fridge' paths using parallel processing.
+    """
     costs = np.array([len(p) - 1 for p in paths_from_fridge])
     rescaled_costs = rescale_costs(costs)
 
-    # Calculate visual and audio framing
-    utilities = []
-    optimal_plant_spots = []
+    pool_args = [(i, path, task, rescaled_costs) for i, path in enumerate(paths_from_fridge)]
     
-    _, _, p_fridge_door, _ = task.simple_path_sequences
-    fridge_access_point = task.world.get_fridge_access_point()
-    naive_A_map = getattr(task.config.evidence, 'naive_A_visual_likelihoods_map', {})
-    naive_B_map = getattr(task.config.evidence, 'naive_B_visual_likelihoods_map', {})
+    with Pool() as pool:
+        results = pool.map(_calculate_utility_for_single_from_path, pool_args)
 
-    for i, p_from in enumerate(paths_from_fridge):
-        # Visual part
-        try:
-            seg_fridge_door = next(p for p in p_fridge_door if tuple(p_from[:len(p)]) == tuple(p))
-            optimal_spot, _ = calculate_optimal_plant_spot_and_slider(
-                task.world, task.agent_id, seg_fridge_door, fridge_access_point, task.config
-            )
-        except StopIteration:
-            optimal_spot = None
-        optimal_plant_spots.append(optimal_spot)
-        
-        likelihood_A_visual = naive_A_map.get(optimal_spot, 0)
-        likelihood_B_visual = naive_B_map.get(optimal_spot, 0)
+    utilities, optimal_plant_spots = zip(*results)
 
-        # Audio part (independent of 'to' path)
-        len_from = len(p_from) - 1
-        likelihood_A_audio, likelihood_B_audio = compute_audio_framing_likelihoods(0, len_from, task.config)
-        
-        # Combine
-        framing_metric_visual = normalized_slider_prediction(likelihood_A_visual, 0) / 100.0
-        framing_metric_audio = normalized_slider_prediction(likelihood_A_audio, likelihood_B_audio) / 100.0
-        framing_metric = (framing_metric_visual + framing_metric_audio) / 2 # Example combination
-
-        cost_factor = task.config.sampling.cost_weight * (1 - rescaled_costs[i])
-        framing_factor = (1 - task.config.sampling.cost_weight) * framing_metric
-
-        if task.agent_id == 'A':
-            utility = cost_factor + framing_factor
-        else: # Agent B minimizes framing metric
-            utility = cost_factor - framing_factor
-        utilities.append(utility)
-
-    return np.array(utilities), optimal_plant_spots
+    return np.array(utilities), list(optimal_plant_spots)
 
 
 def group_paths_by_length(paths: List) -> Dict[int, List]:
@@ -266,6 +272,31 @@ def group_paths_by_length(paths: List) -> Dict[int, List]:
             paths_by_len[length] = []
         paths_by_len[length].append(path)
     return paths_by_len
+
+
+def calculate_single_segment_audio_likelihoods(
+    eval_steps: int, 
+    direction: str, 
+    config: SimulationConfig
+) -> Tuple[float, float]:
+    """Computes audio likelihoods for a single path segment (to or from)."""
+    if direction == 'to':
+        naive_A_steps = getattr(config.evidence, 'naive_A_to_fridge_steps_model', [])
+        naive_B_steps = getattr(config.evidence, 'naive_B_to_fridge_steps_model', [])
+    elif direction == 'from':
+        naive_A_steps = getattr(config.evidence, 'naive_A_from_fridge_steps_model', [])
+        naive_B_steps = getattr(config.evidence, 'naive_B_from_fridge_steps_model', [])
+    else:
+        raise ValueError(f"Invalid direction for audio likelihood calculation: {direction}")
+
+    sigma_factor = config.evidence.audio_similarity_sigma
+    
+    likelihood_A = sum(single_segment_audio_likelihood(eval_steps, step, sigma_factor) 
+                       for step in naive_A_steps) / len(naive_A_steps) if naive_A_steps else 0
+    likelihood_B = sum(single_segment_audio_likelihood(eval_steps, step, sigma_factor) 
+                       for step in naive_B_steps) / len(naive_B_steps) if naive_B_steps else 0
+    
+    return likelihood_A, likelihood_B
 
 
 def calculate_single_audio_utility(
@@ -304,11 +335,26 @@ def compute_audio_framing_likelihoods(
     config: SimulationConfig
 ) -> Tuple[float, float]:
     """
+    Compute combined audio framing likelihoods for a given step pair.
+    """
+    likelihood_A_to, likelihood_B_to = calculate_single_segment_audio_likelihoods(eval_steps_to, 'to', config)
+    likelihood_A_from, likelihood_B_from = calculate_single_segment_audio_likelihoods(eval_steps_from, 'from', config)
+    
+    likelihood_A = likelihood_A_to * likelihood_A_from
+    likelihood_B = likelihood_B_to * likelihood_B_from
+    
+    return likelihood_A, likelihood_B
+
+
+def compute_audio_framing_likelihoods_old(
+    eval_steps_to: int,
+    eval_steps_from: int,
+    config: SimulationConfig
+) -> Tuple[float, float]:
+    """
     Compute audio framing likelihoods for a given step pair.
     Uses naive agent model step distributions for sophisticated agent framing calculations.
     """
-    logger = logging.getLogger(__name__)
-    
     naive_A_to_steps = getattr(config.evidence, 'naive_A_to_fridge_steps_model', [])
     naive_A_from_steps = getattr(config.evidence, 'naive_A_from_fridge_steps_model', [])
     naive_B_to_steps = getattr(config.evidence, 'naive_B_to_fridge_steps_model', [])

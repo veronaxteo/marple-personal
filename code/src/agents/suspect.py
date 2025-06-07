@@ -5,7 +5,6 @@ Handles both naive and sophisticated suspect behaviors with different
 sampling strategies based on evidence type.
 """
 
-import logging
 from typing import Dict, Any
 
 from .base import Agent
@@ -52,6 +51,9 @@ class Suspect(Agent):
             simple_path_sequences=paths_B,
             config=self.config
         )
+
+        # print(f"Sampling {num_suspect_paths} paths for agent A")
+        # print(f"Sampling {num_suspect_paths} paths for agent B")
         
         # Sample paths for both agents
         agent_A_data = world.path_sampler.sample_paths(task_A)
