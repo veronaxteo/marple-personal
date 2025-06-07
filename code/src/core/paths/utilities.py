@@ -151,8 +151,8 @@ def calculate_multimodal_utilities(
 
 
 def calculate_to_fridge_utilities(task: PathSamplingTask, paths_to_fridge: List) -> np.ndarray:
-    """Calculate utilities for 'to fridge' paths using pre-computed slider map."""
-    audio_to_slider_map = getattr(task.config.evidence, 'audio_to_slider_map', {})
+    """Calculate utilities for 'to fridge' paths using pre-computed likelihoods."""
+    audio_to_lik_map = getattr(task.config.evidence, 'audio_to_likelihood_map', {})
 
     costs = np.array([len(p) - 1 for p in paths_to_fridge])
     rescaled_costs = rescale_costs(costs)
@@ -160,7 +160,10 @@ def calculate_to_fridge_utilities(task: PathSamplingTask, paths_to_fridge: List)
     utilities = []
     for i, path in enumerate(paths_to_fridge):
         path_len = len(path) - 1
-        framing_metric = audio_to_slider_map.get(path_len, 0) / 100.0
+        
+        # Get likelihoods and compute framing metric
+        lik_A_audio, lik_B_audio = audio_to_lik_map.get(path_len, (0.0, 0.0))
+        framing_metric = normalized_slider_prediction(lik_A_audio, lik_B_audio) / 100.0
         
         cost_factor = task.config.sampling.cost_weight * (1 - rescaled_costs[i])
         framing_factor = (1 - task.config.sampling.cost_weight) * framing_metric
@@ -183,21 +186,30 @@ def _calculate_utility_for_single_from_path(args: Tuple) -> Tuple[float, any]:
     config = task.config
     agent_id = task.agent_id
     
-    # Get pre-computed slider maps
-    visual_slider_map = getattr(config.evidence, 'visual_slider_map', {})
-    audio_from_slider_map = getattr(config.evidence, 'audio_from_slider_map', {})
+    # Get pre-computed likelihood maps
+    visual_lik_map_A = getattr(config.evidence, 'naive_A_visual_likelihoods_map', {})
+    visual_lik_map_B = getattr(config.evidence, 'naive_B_visual_likelihoods_map', {})
+    audio_from_lik_map = getattr(config.evidence, 'audio_from_likelihood_map', {})
 
-    # Visual evidence framing
-    optimal_spot, best_visual_slider = _find_best_framing_spot(p_from, agent_id, visual_slider_map)
-    framing_metric_visual = best_visual_slider / 100.0
+    # Find the best plant spot based on the visual slider map, as this is the agent's goal
+    visual_slider_map = getattr(config.evidence, 'visual_slider_map', {})
+    optimal_spot, _ = _find_best_framing_spot(p_from, agent_id, visual_slider_map)
+
+    # Get the likelihoods for that optimal spot
+    lik_A_visual = visual_lik_map_A.get(optimal_spot, 0)
+    lik_B_visual = visual_lik_map_B.get(optimal_spot, 0)
     
-    # Audio evidence framing
+    # Get audio likelihoods for the path's length
     len_from = len(p_from) - 1
-    framing_metric_audio = audio_from_slider_map.get(len_from, 0) / 100.0
+    lik_A_audio, lik_B_audio = audio_from_lik_map.get(len_from, (0.0, 0.0))
     
-    # Combine framing scores by averaging them
-    # TODO: is this what we want? Or multiply them?
-    framing_metric = (framing_metric_visual + framing_metric_audio) / 2
+    # Combine likelihoods by multiplying
+    total_multimodal_lik_A = lik_A_visual * lik_A_audio
+    total_multimodal_lik_B = lik_B_visual * lik_B_audio
+    
+    # Calculate the final slider prediction from the combined likelihoods
+    framing_metric = normalized_slider_prediction(total_multimodal_lik_A, total_multimodal_lik_B) / 100.0
+    
     cost_factor = config.sampling.cost_weight * (1 - rescaled_costs[i])
     framing_factor = (1 - config.sampling.cost_weight) * framing_metric
 

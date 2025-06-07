@@ -97,3 +97,37 @@ def create_audio_slider_maps(
         from_slider_map[length] = normalized_slider_prediction(lik_A_from, lik_B_from)
         
     return to_slider_map, from_slider_map 
+
+
+def create_audio_likelihood_maps(
+    audio_model_A: Tuple[list, list], 
+    audio_model_B: Tuple[list, list],
+    config: SimulationConfig
+) -> Tuple[Dict[int, Tuple[float, float]], Dict[int, Tuple[float, float]]]:
+    """
+    Creates maps from a path length to its raw (A, B) likelihood pair.
+
+    Args:
+        audio_model_A: A tuple of ([to_steps], [from_steps]) for agent A.
+        audio_model_B: A tuple of ([to_steps], [from_steps]) for agent B.
+        config: The simulation configuration, used for max_steps.
+
+    Returns:
+        A tuple of (to_likelihood_map, from_likelihood_map), where each map is
+        {path_length: (likelihood_A, likelihood_B)}.
+    """
+    to_likelihood_map = {}
+    from_likelihood_map = {}
+    max_len = config.sampling.max_steps
+    
+    # Evaluate for all possible path lengths from 1 to max_steps
+    for length in range(1, max_len + 1):
+        # "To" segment
+        lik_A_to, lik_B_to = _calculate_single_segment_audio_likelihoods(length, 'to', audio_model_A, audio_model_B, config)
+        to_likelihood_map[length] = (lik_A_to, lik_B_to)
+        
+        # "From" segment
+        lik_A_from, lik_B_from = _calculate_single_segment_audio_likelihoods(length, 'from', audio_model_A, audio_model_B, config)
+        from_likelihood_map[length] = (lik_A_from, lik_B_from)
+        
+    return to_likelihood_map, from_likelihood_map 

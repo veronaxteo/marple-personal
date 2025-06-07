@@ -4,7 +4,7 @@ from src.core.world import World
 from src.core.world.utils import load_or_compute_simple_path_sequences
 from src.agents import Suspect, Detective
 from .base import BaseSimulator
-from ..utils.path_utils import create_visual_slider_map, create_audio_slider_maps
+from ..utils.path_utils import create_visual_slider_map, create_audio_slider_maps, create_audio_likelihood_maps
 
 
 class RSMSimulator(BaseSimulator):
@@ -60,9 +60,16 @@ class RSMSimulator(BaseSimulator):
             
             audio_model_A = naive_A_model['audio']
             audio_model_B = naive_B_model['audio']
-            to_map, from_map = create_audio_slider_maps(audio_model_A, audio_model_B, self.config)
-            self.config.evidence.audio_to_slider_map = to_map
-            self.config.evidence.audio_from_slider_map = from_map
+
+            # Create slider maps for the audio-only part of utility
+            to_slider_map, from_slider_map = create_audio_slider_maps(audio_model_A, audio_model_B, self.config)
+            self.config.evidence.audio_to_slider_map = to_slider_map
+            self.config.evidence.audio_from_slider_map = from_slider_map
+
+            # Create likelihood maps for the combined multimodal utility calculation
+            to_lik_map, from_lik_map = create_audio_likelihood_maps(audio_model_A, audio_model_B, self.config)
+            self.config.evidence.audio_to_likelihood_map = to_lik_map
+            self.config.evidence.audio_from_likelihood_map = from_lik_map
 
         # Process naive models for sophisticated suspects
         # Note: smoothing only done after naive detective predictions (smoothing for sophisticated agents only)

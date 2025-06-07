@@ -13,8 +13,7 @@ from .utilities import (
     rescale_costs,
     get_noisy_plant_spot,
     calculate_audio_utilities,
-    calculate_visual_utilities,
-    calculate_multimodal_utilities
+    calculate_visual_utilities
 )
 
 __all__ = [
@@ -27,6 +26,5 @@ __all__ = [
     'rescale_costs',
     'get_noisy_plant_spot',
     'calculate_audio_utilities',
-    'calculate_visual_utilities',
-    'calculate_multimodal_utilities'
+    'calculate_visual_utilities'
 ] 
