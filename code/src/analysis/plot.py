@@ -257,7 +257,7 @@ def plot_multimodal_audio_predictions_heatmap(trial_name: str, param_log_dir: st
     to_fridge_lengths = [key[0] for key in averaged_audio_predictions.keys()]
     from_fridge_lengths = [key[1] for key in averaged_audio_predictions.keys()]
     unique_to_lengths = sorted(set(to_fridge_lengths))
-    unique_from_lengths = sorted(set(from_fridge_lengths))
+    unique_from_lengths = sorted(set(from_fridge_lengths), reverse=True)  # Reverse sort for y-axis
     
     heatmap_grid = np.full((len(unique_from_lengths), len(unique_to_lengths)), np.nan)
     
@@ -410,7 +410,7 @@ def plot_detective_audio_predictions_heatmap(trial_name: str, param_log_dir: str
             prediction_values.append(prediction)
     
     unique_to_lengths = sorted(set(to_fridge_lengths))
-    unique_from_lengths = sorted(set(from_fridge_lengths))
+    unique_from_lengths = sorted(set(from_fridge_lengths), reverse=True)  # Reverse sort for y-axis
     
     heatmap_grid = np.full((len(unique_from_lengths), len(unique_to_lengths)), np.nan)
     
@@ -440,7 +440,8 @@ def plot_detective_audio_predictions_heatmap(trial_name: str, param_log_dir: str
                 linewidths=0.5, 
                 linecolor='gray',
                 xticklabels=unique_to_lengths,
-                yticklabels=unique_from_lengths)
+                yticklabels=unique_from_lengths
+                )
     
     plt.title(f"Audio Detective Predictions ({detective_agent_type.capitalize()})\n"
               f"Trial: {trial_name}, Slider: (-50: A, +50: B)")

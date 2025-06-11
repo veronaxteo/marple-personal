@@ -1,0 +1,595 @@
+{
+    "trial_name": "snack6",
+    "agent_type_being_simulated": "sophisticated",
+    "evidence_type": "audio",
+    "predictions": [
+        {
+            "gt_sequence": [
+                12,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                12
+            ],
+            "likelihood_A": 4.467262872406352e-12,
+            "likelihood_B": 1.9279514514683574e-05,
+            "prediction": 50.0
+        },
+        {
+            "gt_sequence": [
+                12,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                14
+            ],
+            "likelihood_A": 2.0540512923936648e-06,
+            "likelihood_B": 7.731840278945658e-05,
+            "prediction": 47.0
+        },
+        {
+            "gt_sequence": [
+                12,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                16
+            ],
+            "likelihood_A": 0.000878738688894047,
+            "likelihood_B": 3.539894427985688e-05,
+            "prediction": -46.0
+        },
+        {
+            "gt_sequence": [
+                12,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                18
+            ],
+            "likelihood_A": 0.010788406306925916,
+            "likelihood_B": 6.545620871454573e-06,
+            "prediction": -50.0
+        },
+        {
+            "gt_sequence": [
+                12,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                20
+            ],
+            "likelihood_A": 0.02005540105653335,
+            "likelihood_B": 8.589825860863148e-07,
+            "prediction": -50.0
+        },
+        {
+            "gt_sequence": [
+                12,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                22
+            ],
+            "likelihood_A": 0.014185288110894263,
+            "likelihood_B": 1.0759214507294722e-07,
+            "prediction": -50.0
+        },
+        {
+            "gt_sequence": [
+                12,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                24
+            ],
+            "likelihood_A": 0.008511130358066575,
+            "likelihood_B": 5.030728569203357e-08,
+            "prediction": -50.0
+        },
+        {
+            "gt_sequence": [
+                14,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                12
+            ],
+            "likelihood_A": 1.6102153861301117e-12,
+            "likelihood_B": 0.001797569044715173,
+            "prediction": 50.0
+        },
+        {
+            "gt_sequence": [
+                14,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                14
+            ],
+            "likelihood_A": 7.403784129026184e-07,
+            "likelihood_B": 0.00720895577212333,
+            "prediction": 50.0
+        },
+        {
+            "gt_sequence": [
+                14,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                16
+            ],
+            "likelihood_A": 0.000316739549903408,
+            "likelihood_B": 0.0033005022728050913,
+            "prediction": 41.0
+        },
+        {
+            "gt_sequence": [
+                14,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                18
+            ],
+            "likelihood_A": 0.0038895932928285216,
+            "likelihood_B": 0.0006104698598593497,
+            "prediction": -36.0
+        },
+        {
+            "gt_sequence": [
+                14,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                20
+            ],
+            "likelihood_A": 0.007431161874015137,
+            "likelihood_B": 8.155834241609212e-05,
+            "prediction": -49.0
+        },
+        {
+            "gt_sequence": [
+                14,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                22
+            ],
+            "likelihood_A": 0.008599180673202408,
+            "likelihood_B": 2.817947104008174e-05,
+            "prediction": -50.0
+        },
+        {
+            "gt_sequence": [
+                14,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                24
+            ],
+            "likelihood_A": 0.015932504080701588,
+            "likelihood_B": 0.0001715554236652824,
+            "prediction": -49.0
+        },
+        {
+            "gt_sequence": [
+                16,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                12
+            ],
+            "likelihood_A": 2.0047162206921158e-13,
+            "likelihood_B": 0.004987044175545943,
+            "prediction": 50.0
+        },
+        {
+            "gt_sequence": [
+                16,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                14
+            ],
+            "likelihood_A": 9.206668689038583e-08,
+            "likelihood_B": 0.020000000080430756,
+            "prediction": 50.0
+        },
+        {
+            "gt_sequence": [
+                16,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                16
+            ],
+            "likelihood_A": 3.940142200423467e-05,
+            "likelihood_B": 0.009157462785714783,
+            "prediction": 50.0
+        },
+        {
+            "gt_sequence": [
+                16,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                18
+            ],
+            "likelihood_A": 0.00048554857633470146,
+            "likelihood_B": 0.0017690952377846369,
+            "prediction": 28.0
+        },
+        {
+            "gt_sequence": [
+                16,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                20
+            ],
+            "likelihood_A": 0.001019537497591092,
+            "likelihood_B": 0.0007730045937921706,
+            "prediction": -7.0
+        },
+        {
+            "gt_sequence": [
+                16,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                22
+            ],
+            "likelihood_A": 0.0025648583449447244,
+            "likelihood_B": 0.0014003922810072815,
+            "prediction": -15.0
+        },
+        {
+            "gt_sequence": [
+                16,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                24
+            ],
+            "likelihood_A": 0.007593193831652562,
+            "likelihood_B": 0.0054732724323527234,
+            "prediction": -8.0
+        },
+        {
+            "gt_sequence": [
+                18,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                12
+            ],
+            "likelihood_A": 4.2238922622772495e-12,
+            "likelihood_B": 0.0026900490672472337,
+            "prediction": 50.0
+        },
+        {
+            "gt_sequence": [
+                18,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                14
+            ],
+            "likelihood_A": 1.9931140252361357e-07,
+            "likelihood_B": 0.01078815916629743,
+            "prediction": 50.0
+        },
+        {
+            "gt_sequence": [
+                18,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                16
+            ],
+            "likelihood_A": 7.975699134807782e-05,
+            "likelihood_B": 0.004953605516755045,
+            "prediction": 48.0
+        },
+        {
+            "gt_sequence": [
+                18,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                18
+            ],
+            "likelihood_A": 0.0011008929508423279,
+            "likelihood_B": 0.002011950345410003,
+            "prediction": 15.0
+        },
+        {
+            "gt_sequence": [
+                18,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                20
+            ],
+            "likelihood_A": 0.0030207360781839055,
+            "likelihood_B": 0.007844837672801377,
+            "prediction": 22.0
+        },
+        {
+            "gt_sequence": [
+                18,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                22
+            ],
+            "likelihood_A": 0.006706284182818669,
+            "likelihood_B": 0.014909135149797031,
+            "prediction": 19.0
+        },
+        {
+            "gt_sequence": [
+                18,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                24
+            ],
+            "likelihood_A": 0.01786949405552116,
+            "likelihood_B": 0.026496012607186294,
+            "prediction": 10.0
+        },
+        {
+            "gt_sequence": [
+                20,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                12
+            ],
+            "likelihood_A": 8.307000829511187e-10,
+            "likelihood_B": 0.0006749230616201685,
+            "prediction": 50.0
+        },
+        {
+            "gt_sequence": [
+                20,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                14
+            ],
+            "likelihood_A": 4.998579567660363e-06,
+            "likelihood_B": 0.002707100199895619,
+            "prediction": 50.0
+        },
+        {
+            "gt_sequence": [
+                20,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                16
+            ],
+            "likelihood_A": 0.000646035612237383,
+            "likelihood_B": 0.0013899175146367476,
+            "prediction": 18.0
+        },
+        {
+            "gt_sequence": [
+                20,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                18
+            ],
+            "likelihood_A": 0.007824878481034348,
+            "likelihood_B": 0.004425025966006861,
+            "prediction": -14.0
+        },
+        {
+            "gt_sequence": [
+                20,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                20
+            ],
+            "likelihood_A": 0.021115412687927312,
+            "likelihood_B": 0.02283331020399634,
+            "prediction": 2.0
+        },
+        {
+            "gt_sequence": [
+                20,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                22
+            ],
+            "likelihood_A": 0.03711707953053241,
+            "likelihood_B": 0.04457795803324391,
+            "prediction": 5.0
+        },
+        {
+            "gt_sequence": [
+                20,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                24
+            ],
+            "likelihood_A": 0.07363274740621076,
+            "likelihood_B": 0.0751424889102801,
+            "prediction": 1.0
+        },
+        {
+            "gt_sequence": [
+                22,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                12
+            ],
+            "likelihood_A": 1.4277299310950682e-08,
+            "likelihood_B": 0.00012097759579510373,
+            "prediction": 50.0
+        },
+        {
+            "gt_sequence": [
+                22,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                14
+            ],
+            "likelihood_A": 6.675390362232803e-05,
+            "likelihood_B": 0.0004947610677686272,
+            "prediction": 38.0
+        },
+        {
+            "gt_sequence": [
+                22,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                16
+            ],
+            "likelihood_A": 0.0026713421909341727,
+            "likelihood_B": 0.0010767072580206184,
+            "prediction": -21.0
+        },
+        {
+            "gt_sequence": [
+                22,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                18
+            ],
+            "likelihood_A": 0.016707328983969157,
+            "likelihood_B": 0.010833982710649403,
+            "prediction": -11.0
+        },
+        {
+            "gt_sequence": [
+                22,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                20
+            ],
+            "likelihood_A": 0.040697167954687946,
+            "likelihood_B": 0.037375638534859354,
+            "prediction": -2.0
+        },
+        {
+            "gt_sequence": [
+                22,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                22
+            ],
+            "likelihood_A": 0.07991055323365734,
+            "likelihood_B": 0.07355589171537893,
+            "prediction": -2.0
+        },
+        {
+            "gt_sequence": [
+                22,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                24
+            ],
+            "likelihood_A": 0.15606878113638467,
+            "likelihood_B": 0.14022578993846563,
+            "prediction": -3.0
+        },
+        {
+            "gt_sequence": [
+                24,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                12
+            ],
+            "likelihood_A": 5.267293165834009e-08,
+            "likelihood_B": 1.929810507988447e-05,
+            "prediction": 50.0
+        },
+        {
+            "gt_sequence": [
+                24,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                14
+            ],
+            "likelihood_A": 0.00024052765106453446,
+            "likelihood_B": 0.0001640673218553606,
+            "prediction": -9.0
+        },
+        {
+            "gt_sequence": [
+                24,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                16
+            ],
+            "likelihood_A": 0.007323425833581929,
+            "likelihood_B": 0.003438008964934174,
+            "prediction": -18.0
+        },
+        {
+            "gt_sequence": [
+                24,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                18
+            ],
+            "likelihood_A": 0.025975676573617896,
+            "likelihood_B": 0.020742377113131275,
+            "prediction": -6.0
+        },
+        {
+            "gt_sequence": [
+                24,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                20
+            ],
+            "likelihood_A": 0.04938167470619604,
+            "likelihood_B": 0.05217822096419411,
+            "prediction": 1.0
+        },
+        {
+            "gt_sequence": [
+                24,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                22
+            ],
+            "likelihood_A": 0.11892605575068659,
+            "likelihood_B": 0.11366443857827538,
+            "prediction": -1.0
+        },
+        {
+            "gt_sequence": [
+                24,
+                "fridge_opened",
+                "snack_picked_up",
+                "fridge_closed",
+                24
+            ],
+            "likelihood_A": 0.2572467410564986,
+            "likelihood_B": 0.23643737788714142,
+            "prediction": -2.0
+        }
+    ]
+}

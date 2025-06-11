@@ -198,7 +198,7 @@ def create_config_from_args(args):
             defaults = yaml.safe_load(f)
         
         defaults['default_trial'] = args.trial
-        defaults['sampling']['cost_weight'] = 0.1
+        defaults['sampling']['cost_weight'] = 1.0
         defaults['sampling']['naive_temp'] = 0.01
         defaults['sampling']['sophisticated_temp'] = 0.01
         defaults['sampling']['max_steps'] = 25
@@ -224,7 +224,7 @@ def create_config_from_args(args):
             defaults = yaml.safe_load(f)
         
         defaults['default_trial'] = args.trial
-        defaults['sampling']['cost_weight'] = 0.1
+        defaults['sampling']['cost_weight'] = 1.0
         defaults['sampling']['naive_temp'] = 0.01
         defaults['sampling']['sophisticated_temp'] = 0.01
         defaults['sampling']['max_steps'] = args.max_steps

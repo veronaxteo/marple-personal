@@ -1,0 +1,466 @@
+{
+    "trial_name": "snack1",
+    "agent_type_being_simulated": "sophisticated",
+    "evidence_type": "visual",
+    "predictions": [
+        {
+            "crumb_coord": [
+                1,
+                9
+            ],
+            "likelihood_A": 0.026402640264026403,
+            "likelihood_B": 0.0297029702970297,
+            "prediction": 3.0
+        },
+        {
+            "crumb_coord": [
+                1,
+                10
+            ],
+            "likelihood_A": 0.027227722772277228,
+            "likelihood_B": 0.02475247524752475,
+            "prediction": -2.0
+        },
+        {
+            "crumb_coord": [
+                1,
+                11
+            ],
+            "likelihood_A": 0.019801980198019802,
+            "likelihood_B": 0.04620462046204621,
+            "prediction": 20.0
+        },
+        {
+            "crumb_coord": [
+                1,
+                12
+            ],
+            "likelihood_A": 0.013201320132013201,
+            "likelihood_B": 0.099009900990099,
+            "prediction": 38.0
+        },
+        {
+            "crumb_coord": [
+                1,
+                13
+            ],
+            "likelihood_A": 0.01485148514851485,
+            "likelihood_B": 0.14356435643564355,
+            "prediction": 41.0
+        },
+        {
+            "crumb_coord": [
+                2,
+                9
+            ],
+            "likelihood_A": 0.02722772277227723,
+            "likelihood_B": 0.03217821782178218,
+            "prediction": 4.0
+        },
+        {
+            "crumb_coord": [
+                2,
+                10
+            ],
+            "likelihood_A": 0.037128712871287134,
+            "likelihood_B": 0.022277227722772276,
+            "prediction": -13.0
+        },
+        {
+            "crumb_coord": [
+                3,
+                9
+            ],
+            "likelihood_A": 0.05445544554455446,
+            "likelihood_B": 0.03217821782178218,
+            "prediction": -13.0
+        },
+        {
+            "crumb_coord": [
+                3,
+                10
+            ],
+            "likelihood_A": 0.05940594059405941,
+            "likelihood_B": 0.024752475247524754,
+            "prediction": -21.0
+        },
+        {
+            "crumb_coord": [
+                4,
+                9
+            ],
+            "likelihood_A": 0.06188118811881189,
+            "likelihood_B": 0.042079207920792075,
+            "prediction": -10.0
+        },
+        {
+            "crumb_coord": [
+                4,
+                10
+            ],
+            "likelihood_A": 0.07326732673267326,
+            "likelihood_B": 0.027722772277227727,
+            "prediction": -23.0
+        },
+        {
+            "crumb_coord": [
+                4,
+                11
+            ],
+            "likelihood_A": 0.05445544554455446,
+            "likelihood_B": 0.014851485148514853,
+            "prediction": -29.0
+        },
+        {
+            "crumb_coord": [
+                4,
+                12
+            ],
+            "likelihood_A": 0.017326732673267328,
+            "likelihood_B": 0.009900990099009901,
+            "prediction": -14.0
+        },
+        {
+            "crumb_coord": [
+                4,
+                13
+            ],
+            "likelihood_A": 0.009900990099009901,
+            "likelihood_B": 0.009900990099009901,
+            "prediction": 0.0
+        },
+        {
+            "crumb_coord": [
+                5,
+                9
+            ],
+            "likelihood_A": 0.0561056105610561,
+            "likelihood_B": 0.04620462046204621,
+            "prediction": -5.0
+        },
+        {
+            "crumb_coord": [
+                5,
+                10
+            ],
+            "likelihood_A": 0.05940594059405941,
+            "likelihood_B": 0.0297029702970297,
+            "prediction": -17.0
+        },
+        {
+            "crumb_coord": [
+                5,
+                11
+            ],
+            "likelihood_A": 0.039603960396039604,
+            "likelihood_B": 0.013861386138613863,
+            "prediction": -24.0
+        },
+        {
+            "crumb_coord": [
+                5,
+                12
+            ],
+            "likelihood_A": 0.02178217821782178,
+            "likelihood_B": 0.009900990099009901,
+            "prediction": -19.0
+        },
+        {
+            "crumb_coord": [
+                5,
+                13
+            ],
+            "likelihood_A": 0.009900990099009901,
+            "likelihood_B": 0.009900990099009901,
+            "prediction": 0.0
+        },
+        {
+            "crumb_coord": [
+                6,
+                11
+            ],
+            "likelihood_A": 0.027227722772277228,
+            "likelihood_B": 0.009900990099009901,
+            "prediction": -23.0
+        },
+        {
+            "crumb_coord": [
+                6,
+                12
+            ],
+            "likelihood_A": 0.011881188118811881,
+            "likelihood_B": 0.009900990099009901,
+            "prediction": -5.0
+        },
+        {
+            "crumb_coord": [
+                6,
+                13
+            ],
+            "likelihood_A": 0.009900990099009901,
+            "likelihood_B": 0.009900990099009901,
+            "prediction": 0.0
+        },
+        {
+            "crumb_coord": [
+                7,
+                11
+            ],
+            "likelihood_A": 0.012376237623762377,
+            "likelihood_B": 0.009900990099009901,
+            "prediction": -6.0
+        },
+        {
+            "crumb_coord": [
+                7,
+                12
+            ],
+            "likelihood_A": 0.009900990099009901,
+            "likelihood_B": 0.009900990099009901,
+            "prediction": 0.0
+        },
+        {
+            "crumb_coord": [
+                7,
+                13
+            ],
+            "likelihood_A": 0.009900990099009901,
+            "likelihood_B": 0.009900990099009901,
+            "prediction": 0.0
+        },
+        {
+            "crumb_coord": [
+                8,
+                11
+            ],
+            "likelihood_A": 0.009900990099009901,
+            "likelihood_B": 0.009900990099009901,
+            "prediction": 0.0
+        },
+        {
+            "crumb_coord": [
+                8,
+                12
+            ],
+            "likelihood_A": 0.009900990099009901,
+            "likelihood_B": 0.009900990099009901,
+            "prediction": 0.0
+        },
+        {
+            "crumb_coord": [
+                8,
+                13
+            ],
+            "likelihood_A": 0.009900990099009901,
+            "likelihood_B": 0.009900990099009901,
+            "prediction": 0.0
+        },
+        {
+            "crumb_coord": [
+                9,
+                9
+            ],
+            "likelihood_A": 0.009900990099009901,
+            "likelihood_B": 0.009900990099009901,
+            "prediction": 0.0
+        },
+        {
+            "crumb_coord": [
+                9,
+                10
+            ],
+            "likelihood_A": 0.009900990099009901,
+            "likelihood_B": 0.009900990099009901,
+            "prediction": 0.0
+        },
+        {
+            "crumb_coord": [
+                9,
+                11
+            ],
+            "likelihood_A": 0.009900990099009901,
+            "likelihood_B": 0.009900990099009901,
+            "prediction": 0.0
+        },
+        {
+            "crumb_coord": [
+                9,
+                12
+            ],
+            "likelihood_A": 0.009900990099009901,
+            "likelihood_B": 0.009900990099009901,
+            "prediction": 0.0
+        },
+        {
+            "crumb_coord": [
+                9,
+                13
+            ],
+            "likelihood_A": 0.009900990099009901,
+            "likelihood_B": 0.009900990099009901,
+            "prediction": 0.0
+        },
+        {
+            "crumb_coord": [
+                10,
+                9
+            ],
+            "likelihood_A": 0.009900990099009901,
+            "likelihood_B": 0.009900990099009901,
+            "prediction": 0.0
+        },
+        {
+            "crumb_coord": [
+                10,
+                10
+            ],
+            "likelihood_A": 0.009900990099009901,
+            "likelihood_B": 0.009900990099009901,
+            "prediction": 0.0
+        },
+        {
+            "crumb_coord": [
+                10,
+                11
+            ],
+            "likelihood_A": 0.009900990099009901,
+            "likelihood_B": 0.009900990099009901,
+            "prediction": 0.0
+        },
+        {
+            "crumb_coord": [
+                10,
+                12
+            ],
+            "likelihood_A": 0.009900990099009901,
+            "likelihood_B": 0.009900990099009901,
+            "prediction": 0.0
+        },
+        {
+            "crumb_coord": [
+                10,
+                13
+            ],
+            "likelihood_A": 0.009900990099009901,
+            "likelihood_B": 0.009900990099009901,
+            "prediction": 0.0
+        },
+        {
+            "crumb_coord": [
+                11,
+                9
+            ],
+            "likelihood_A": 0.009900990099009901,
+            "likelihood_B": 0.009900990099009901,
+            "prediction": 0.0
+        },
+        {
+            "crumb_coord": [
+                11,
+                10
+            ],
+            "likelihood_A": 0.009900990099009901,
+            "likelihood_B": 0.009900990099009901,
+            "prediction": 0.0
+        },
+        {
+            "crumb_coord": [
+                11,
+                11
+            ],
+            "likelihood_A": 0.009900990099009901,
+            "likelihood_B": 0.009900990099009901,
+            "prediction": 0.0
+        },
+        {
+            "crumb_coord": [
+                11,
+                12
+            ],
+            "likelihood_A": 0.009900990099009901,
+            "likelihood_B": 0.009900990099009901,
+            "prediction": 0.0
+        },
+        {
+            "crumb_coord": [
+                11,
+                13
+            ],
+            "likelihood_A": 0.009900990099009901,
+            "likelihood_B": 0.009900990099009901,
+            "prediction": 0.0
+        },
+        {
+            "crumb_coord": [
+                12,
+                9
+            ],
+            "likelihood_A": 0.009900990099009901,
+            "likelihood_B": 0.009900990099009901,
+            "prediction": 0.0
+        },
+        {
+            "crumb_coord": [
+                12,
+                10
+            ],
+            "likelihood_A": 0.009900990099009901,
+            "likelihood_B": 0.009900990099009901,
+            "prediction": 0.0
+        },
+        {
+            "crumb_coord": [
+                12,
+                11
+            ],
+            "likelihood_A": 0.009900990099009901,
+            "likelihood_B": 0.009900990099009901,
+            "prediction": 0.0
+        },
+        {
+            "crumb_coord": [
+                12,
+                12
+            ],
+            "likelihood_A": 0.009900990099009901,
+            "likelihood_B": 0.009900990099009901,
+            "prediction": 0.0
+        },
+        {
+            "crumb_coord": [
+                12,
+                13
+            ],
+            "likelihood_A": 0.009900990099009901,
+            "likelihood_B": 0.009900990099009901,
+            "prediction": 0.0
+        },
+        {
+            "crumb_coord": [
+                13,
+                9
+            ],
+            "likelihood_A": 0.009900990099009901,
+            "likelihood_B": 0.009900990099009901,
+            "prediction": 0.0
+        },
+        {
+            "crumb_coord": [
+                13,
+                10
+            ],
+            "likelihood_A": 0.009900990099009901,
+            "likelihood_B": 0.009900990099009901,
+            "prediction": 0.0
+        },
+        {
+            "crumb_coord": [
+                13,
+                11
+            ],
+            "likelihood_A": 0.009900990099009901,
+            "likelihood_B": 0.009900990099009901,
+            "prediction": 0.0
+        }
+    ]
+}

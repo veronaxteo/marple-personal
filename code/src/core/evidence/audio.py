@@ -24,9 +24,6 @@ def get_audio_tokens_for_path(world_state: 'World', path_coords: List) -> List[s
         List of raw audio tokens like ['step', 'step', 'fridge_opened', 'snack_picked_up', 'fridge_closed', 'step']
     """
     raw_tokens = []
-    if not path_coords:
-        return raw_tokens
-
     fridge_access_point = world_state.get_fridge_access_point()
     fridge_event_added = False
     

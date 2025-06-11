@@ -1,0 +1,52 @@
+2025-06-11 12:47:21,998 - src.cli - INFO - Starting RSM simulation - Log: /Users/veronateo/marple-personal/code/debug/snack6/w20_ntemp0.05_stemp0.05_steps25_20250611_124721/simulation.log
+2025-06-11 12:47:21,998 - src.cli - INFO - Saved metadata to /Users/veronateo/marple-personal/code/debug/snack6/w20_ntemp0.05_stemp0.05_steps25_20250611_124721/metadata.json
+2025-06-11 12:47:21,998 - src.cli - INFO - Trials to run: ['snack6_A1.json']
+2025-06-11 12:47:21,998 - RSMSimulator - INFO - Starting RSMSimulator simulation with visual evidence
+2025-06-11 12:47:21,998 - RSMSimulator - INFO - ===== Running Trial: snack6 =====
+2025-06-11 12:47:21,999 - RSMSimulator - INFO - Generating 50 suspect paths and 1000 detective paths
+2025-06-11 12:47:22,172 - src.core.world.utils - INFO - Loaded simple path sequences for snack6 from cache
+2025-06-11 12:47:22,172 - Suspect[suspect_rsm] - INFO - Initialized Suspect with suspect data
+2025-06-11 12:47:22,172 - Detective[detective_rsm] - INFO - Initialized Detective with detective data
+2025-06-11 12:47:22,172 - RSMSimulator - INFO - --- Simulating Level 1 (Naive Agent) ---
+2025-06-11 12:47:22,172 - Suspect[suspect_rsm] - INFO - Simulating naive suspect paths using visual evidence
+2025-06-11 12:47:23,638 - src.utils.io_utils - INFO - Saved 100 sampled paths to /Users/veronateo/marple-personal/code/debug/snack6/w20_ntemp0.05_stemp0.05_steps25_20250611_124721/snack6_sampled_paths_naive.csv
+2025-06-11 12:47:23,638 - Suspect[suspect_rsm] - INFO - Simulating naive suspect paths using visual evidence
+2025-06-11 12:47:25,092 - Detective[detective_rsm] - INFO - Simulating detective modeling naive suspects using visual evidence
+2025-06-11 12:47:25,092 - VisualEvidenceProcessor - INFO - Computing VISUAL detective predictions for naive agents
+2025-06-11 12:47:25,178 - src.utils.evidence_utils - INFO - Saved 53 detective predictions to snack6_naive_visual_predictions.json
+2025-06-11 12:47:25,178 - RSMSimulator - INFO - Smoothing visual likelihood maps (sigma=1.0)
+2025-06-11 12:47:25,179 - RSMSimulator - INFO - --- Simulating Level 2 (Sophisticated Agent) ---
+2025-06-11 12:47:25,179 - Suspect[suspect_rsm] - INFO - Simulating sophisticated suspect paths using visual evidence
+2025-06-11 12:47:25,179 - PathSampler - INFO - No cache found. Computing utilities for ('A', 'sophisticated', 'visual')
+2025-06-11 12:47:26,589 - PathSampler - INFO - No cache found. Computing utilities for ('B', 'sophisticated', 'visual')
+2025-06-11 12:47:36,086 - src.utils.io_utils - INFO - Saved 100 sampled paths to /Users/veronateo/marple-personal/code/debug/snack6/w20_ntemp0.05_stemp0.05_steps25_20250611_124721/snack6_sampled_paths_sophisticated.csv
+2025-06-11 12:47:36,086 - Suspect[suspect_rsm] - INFO - Simulating sophisticated suspect paths using visual evidence
+2025-06-11 12:47:36,086 - PathSampler - INFO - Using cached utilities for ('A', 'sophisticated', 'visual')
+2025-06-11 12:47:36,354 - PathSampler - INFO - Using cached utilities for ('B', 'sophisticated', 'visual')
+2025-06-11 12:47:37,285 - Detective[detective_rsm] - INFO - Simulating detective modeling sophisticated suspects using visual evidence
+2025-06-11 12:47:37,285 - VisualEvidenceProcessor - INFO - Computing VISUAL detective predictions for sophisticated agents
+2025-06-11 12:47:37,286 - VisualEvidenceProcessor - INFO - Smoothing visual likelihood maps (sigma=1.0)
+2025-06-11 12:47:37,841 - src.analysis.plot - INFO - Saved smoothing comparison plot for Agent A to /Users/veronateo/marple-personal/code/debug/snack6/w20_ntemp0.05_stemp0.05_steps25_20250611_124721/plots/smoothing_comparison_agent_A_snack6.png
+2025-06-11 12:47:38,301 - src.analysis.plot - INFO - Saved smoothing comparison plot for Agent B to /Users/veronateo/marple-personal/code/debug/snack6/w20_ntemp0.05_stemp0.05_steps25_20250611_124721/plots/smoothing_comparison_agent_B_snack6.png
+2025-06-11 12:47:38,302 - src.utils.evidence_utils - INFO - Saved 53 detective predictions to snack6_sophisticated_visual_predictions.json
+2025-06-11 12:47:38,302 - RSMSimulator - INFO - ===== Finished Trial: snack6 =====
+2025-06-11 12:47:38,302 - RSMSimulator - INFO - RSMSimulator simulation completed
+2025-06-11 12:47:38,302 - src.cli - INFO - Generating automatic plots for simulation results...
+2025-06-11 12:47:38,302 - src.analysis.plot - INFO - Creating visual evidence plots for trial snack6 in /Users/veronateo/marple-personal/code/debug/snack6/w20_ntemp0.05_stemp0.05_steps25_20250611_124721
+2025-06-11 12:47:38,541 - src.analysis.plot - INFO - Saved heatmap for Agent A to /Users/veronateo/marple-personal/code/debug/snack6/w20_ntemp0.05_stemp0.05_steps25_20250611_124721/plots/heatmap_return_from_fridge_agent_A_snack6_naive.png
+2025-06-11 12:47:38,774 - src.analysis.plot - INFO - Saved heatmap for Agent B to /Users/veronateo/marple-personal/code/debug/snack6/w20_ntemp0.05_stemp0.05_steps25_20250611_124721/plots/heatmap_return_from_fridge_agent_B_snack6_naive.png
+2025-06-11 12:47:39,100 - src.analysis.plot - INFO - Saved heatmap for Agent A to /Users/veronateo/marple-personal/code/debug/snack6/w20_ntemp0.05_stemp0.05_steps25_20250611_124721/plots/heatmap_to_fridge_agent_A_snack6_naive.png
+2025-06-11 12:47:39,335 - src.analysis.plot - INFO - Saved heatmap for Agent B to /Users/veronateo/marple-personal/code/debug/snack6/w20_ntemp0.05_stemp0.05_steps25_20250611_124721/plots/heatmap_to_fridge_agent_B_snack6_naive.png
+2025-06-11 12:47:39,572 - src.analysis.plot - INFO - Saved heatmap for Agent A to /Users/veronateo/marple-personal/code/debug/snack6/w20_ntemp0.05_stemp0.05_steps25_20250611_124721/plots/heatmap_return_from_fridge_agent_A_snack6_sophisticated.png
+2025-06-11 12:47:39,808 - src.analysis.plot - INFO - Saved heatmap for Agent B to /Users/veronateo/marple-personal/code/debug/snack6/w20_ntemp0.05_stemp0.05_steps25_20250611_124721/plots/heatmap_return_from_fridge_agent_B_snack6_sophisticated.png
+2025-06-11 12:47:40,074 - src.analysis.plot - INFO - Saved heatmap for Agent A to /Users/veronateo/marple-personal/code/debug/snack6/w20_ntemp0.05_stemp0.05_steps25_20250611_124721/plots/heatmap_to_fridge_agent_A_snack6_sophisticated.png
+2025-06-11 12:47:40,307 - src.analysis.plot - INFO - Saved heatmap for Agent B to /Users/veronateo/marple-personal/code/debug/snack6/w20_ntemp0.05_stemp0.05_steps25_20250611_124721/plots/heatmap_to_fridge_agent_B_snack6_sophisticated.png
+2025-06-11 12:47:40,538 - src.analysis.plot - INFO - Saved crumb planting heatmap for Agent A to /Users/veronateo/marple-personal/code/debug/snack6/w20_ntemp0.05_stemp0.05_steps25_20250611_124721/plots/crumb_planting_heatmap_agent_A_snack6.png
+2025-06-11 12:47:40,803 - src.analysis.plot - INFO - Saved crumb planting heatmap for Agent B to /Users/veronateo/marple-personal/code/debug/snack6/w20_ntemp0.05_stemp0.05_steps25_20250611_124721/plots/crumb_planting_heatmap_agent_B_snack6.png
+2025-06-11 12:47:40,805 - src.analysis.plot - INFO - Plotted 53 predictions on full apartment grid
+2025-06-11 12:47:41,016 - src.analysis.plot - INFO - Saved detective predictions heatmap to /Users/veronateo/marple-personal/code/debug/snack6/w20_ntemp0.05_stemp0.05_steps25_20250611_124721/plots/detective_preds_heatmap_naive_visual_snack6.png
+2025-06-11 12:47:41,017 - src.analysis.plot - INFO - Plotted 53 predictions on full apartment grid
+2025-06-11 12:47:41,232 - src.analysis.plot - INFO - Saved detective predictions heatmap to /Users/veronateo/marple-personal/code/debug/snack6/w20_ntemp0.05_stemp0.05_steps25_20250611_124721/plots/detective_preds_heatmap_sophisticated_visual_snack6.png
+2025-06-11 12:47:41,232 - src.analysis.plot - INFO - Completed visual evidence plots for snack6
+2025-06-11 12:47:41,232 - src.cli - INFO - Generated visual plots for trial snack6
+2025-06-11 12:47:41,232 - src.cli - INFO - RSM simulation completed. Results: 1 trials processed

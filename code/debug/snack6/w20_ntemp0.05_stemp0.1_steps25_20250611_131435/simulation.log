@@ -1,0 +1,55 @@
+2025-06-11 13:14:35,767 - src.cli - INFO - Starting RSM simulation - Log: /Users/veronateo/marple-personal/code/debug/snack6/w20_ntemp0.05_stemp0.1_steps25_20250611_131435/simulation.log
+2025-06-11 13:14:35,767 - src.cli - INFO - Saved metadata to /Users/veronateo/marple-personal/code/debug/snack6/w20_ntemp0.05_stemp0.1_steps25_20250611_131435/metadata.json
+2025-06-11 13:14:35,767 - src.cli - INFO - Trials to run: ['snack6_A1.json']
+2025-06-11 13:14:35,767 - RSMSimulator - INFO - Starting RSMSimulator simulation with audio evidence
+2025-06-11 13:14:35,767 - RSMSimulator - INFO - ===== Running Trial: snack6 =====
+2025-06-11 13:14:35,768 - RSMSimulator - INFO - Generating 50 suspect paths and 1000 detective paths
+2025-06-11 13:14:35,953 - src.core.world.utils - INFO - Loaded simple path sequences for snack6 from cache
+2025-06-11 13:14:35,953 - Suspect[suspect_rsm] - INFO - Initialized Suspect with suspect data
+2025-06-11 13:14:35,953 - Detective[detective_rsm] - INFO - Initialized Detective with detective data
+2025-06-11 13:14:35,953 - RSMSimulator - INFO - --- Simulating Level 1 (Naive Agent) ---
+2025-06-11 13:14:35,953 - Suspect[suspect_rsm] - INFO - Simulating naive suspect paths using audio evidence
+2025-06-11 13:14:37,503 - src.utils.io_utils - INFO - Saved 100 sampled paths to /Users/veronateo/marple-personal/code/debug/snack6/w20_ntemp0.05_stemp0.1_steps25_20250611_131435/snack6_sampled_paths_naive.csv
+2025-06-11 13:14:37,503 - Suspect[suspect_rsm] - INFO - Simulating naive suspect paths using audio evidence
+2025-06-11 13:14:39,068 - Detective[detective_rsm] - INFO - Simulating detective modeling naive suspects using audio evidence
+2025-06-11 13:14:39,068 - AudioEvidenceProcessor - INFO - Computing AUDIO detective predictions for naive agents
+2025-06-11 13:14:39,069 - src.core.evidence.audio - INFO - Agent shortest paths: A->fridge=12, B->fridge=12
+2025-06-11 13:14:39,069 - src.core.evidence.audio - INFO - Agent shortest paths: fridge->A=12, fridge->B=12
+2025-06-11 13:14:39,069 - src.core.evidence.audio - INFO - Using minimum feasible steps: to_fridge>=12, from_fridge>=12
+2025-06-11 13:14:39,069 - src.core.evidence.audio - INFO - Generated 49 ground truth audio sequences
+2025-06-11 13:14:39,561 - src.utils.evidence_utils - INFO - Saved 49 detective predictions to snack6_naive_audio_predictions.json
+2025-06-11 13:14:39,813 - RSMSimulator - INFO - Audio models: A_to(50), A_from(50), B_to(50), B_from(50)
+2025-06-11 13:14:39,813 - RSMSimulator - INFO - --- Simulating Level 2 (Sophisticated Agent) ---
+2025-06-11 13:14:39,813 - Suspect[suspect_rsm] - INFO - Simulating sophisticated suspect paths using audio evidence
+2025-06-11 13:14:39,813 - PathSampler - INFO - No cache found. Computing utilities for ('A', 'sophisticated', 'audio')
+2025-06-11 13:14:40,308 - PathSampler - INFO - No cache found. Computing utilities for ('B', 'sophisticated', 'audio')
+2025-06-11 13:14:42,008 - src.utils.io_utils - INFO - Saved 100 sampled paths to /Users/veronateo/marple-personal/code/debug/snack6/w20_ntemp0.05_stemp0.1_steps25_20250611_131435/snack6_sampled_paths_sophisticated.csv
+2025-06-11 13:14:42,008 - Suspect[suspect_rsm] - INFO - Simulating sophisticated suspect paths using audio evidence
+2025-06-11 13:14:42,008 - PathSampler - INFO - Using cached utilities for ('A', 'sophisticated', 'audio')
+2025-06-11 13:14:42,498 - PathSampler - INFO - Using cached utilities for ('B', 'sophisticated', 'audio')
+2025-06-11 13:14:44,206 - Detective[detective_rsm] - INFO - Simulating detective modeling sophisticated suspects using audio evidence
+2025-06-11 13:14:44,206 - AudioEvidenceProcessor - INFO - Computing AUDIO detective predictions for sophisticated agents
+2025-06-11 13:14:44,206 - src.core.evidence.audio - INFO - Agent shortest paths: A->fridge=12, B->fridge=12
+2025-06-11 13:14:44,206 - src.core.evidence.audio - INFO - Agent shortest paths: fridge->A=12, fridge->B=12
+2025-06-11 13:14:44,206 - src.core.evidence.audio - INFO - Using minimum feasible steps: to_fridge>=12, from_fridge>=12
+2025-06-11 13:14:44,206 - src.core.evidence.audio - INFO - Generated 49 ground truth audio sequences
+2025-06-11 13:14:44,701 - src.utils.evidence_utils - INFO - Saved 49 detective predictions to snack6_sophisticated_audio_predictions.json
+2025-06-11 13:14:44,702 - RSMSimulator - INFO - ===== Finished Trial: snack6 =====
+2025-06-11 13:14:44,702 - RSMSimulator - INFO - RSMSimulator simulation completed
+2025-06-11 13:14:44,702 - src.cli - INFO - Generating automatic plots for simulation results...
+2025-06-11 13:14:44,702 - src.analysis.plot - INFO - Creating audio evidence plots for trial snack6 in /Users/veronateo/marple-personal/code/debug/snack6/w20_ntemp0.05_stemp0.1_steps25_20250611_131435
+2025-06-11 13:14:45,043 - src.analysis.plot - INFO - Saved heatmap for Agent A to /Users/veronateo/marple-personal/code/debug/snack6/w20_ntemp0.05_stemp0.1_steps25_20250611_131435/plots/heatmap_return_from_fridge_agent_A_snack6_naive.png
+2025-06-11 13:14:45,274 - src.analysis.plot - INFO - Saved heatmap for Agent B to /Users/veronateo/marple-personal/code/debug/snack6/w20_ntemp0.05_stemp0.1_steps25_20250611_131435/plots/heatmap_return_from_fridge_agent_B_snack6_naive.png
+2025-06-11 13:14:45,514 - src.analysis.plot - INFO - Saved heatmap for Agent A to /Users/veronateo/marple-personal/code/debug/snack6/w20_ntemp0.05_stemp0.1_steps25_20250611_131435/plots/heatmap_to_fridge_agent_A_snack6_naive.png
+2025-06-11 13:14:45,748 - src.analysis.plot - INFO - Saved heatmap for Agent B to /Users/veronateo/marple-personal/code/debug/snack6/w20_ntemp0.05_stemp0.1_steps25_20250611_131435/plots/heatmap_to_fridge_agent_B_snack6_naive.png
+2025-06-11 13:14:45,986 - src.analysis.plot - INFO - Saved heatmap for Agent A to /Users/veronateo/marple-personal/code/debug/snack6/w20_ntemp0.05_stemp0.1_steps25_20250611_131435/plots/heatmap_return_from_fridge_agent_A_snack6_sophisticated.png
+2025-06-11 13:14:46,312 - src.analysis.plot - INFO - Saved heatmap for Agent B to /Users/veronateo/marple-personal/code/debug/snack6/w20_ntemp0.05_stemp0.1_steps25_20250611_131435/plots/heatmap_return_from_fridge_agent_B_snack6_sophisticated.png
+2025-06-11 13:14:46,552 - src.analysis.plot - INFO - Saved heatmap for Agent A to /Users/veronateo/marple-personal/code/debug/snack6/w20_ntemp0.05_stemp0.1_steps25_20250611_131435/plots/heatmap_to_fridge_agent_A_snack6_sophisticated.png
+2025-06-11 13:14:46,788 - src.analysis.plot - INFO - Saved heatmap for Agent B to /Users/veronateo/marple-personal/code/debug/snack6/w20_ntemp0.05_stemp0.1_steps25_20250611_131435/plots/heatmap_to_fridge_agent_B_snack6_sophisticated.png
+2025-06-11 13:14:46,788 - src.analysis.plot - INFO - Plotted 49 audio predictions on sequence length grid
+2025-06-11 13:14:46,968 - src.analysis.plot - INFO - Saved audio detective predictions heatmap to /Users/veronateo/marple-personal/code/debug/snack6/w20_ntemp0.05_stemp0.1_steps25_20250611_131435/plots/detective_audio_preds_heatmap_naive_snack6.png
+2025-06-11 13:14:46,968 - src.analysis.plot - INFO - Plotted 49 audio predictions on sequence length grid
+2025-06-11 13:14:47,182 - src.analysis.plot - INFO - Saved audio detective predictions heatmap to /Users/veronateo/marple-personal/code/debug/snack6/w20_ntemp0.05_stemp0.1_steps25_20250611_131435/plots/detective_audio_preds_heatmap_sophisticated_snack6.png
+2025-06-11 13:14:47,182 - src.analysis.plot - INFO - Completed audio evidence plots for snack6
+2025-06-11 13:14:47,182 - src.cli - INFO - Generated audio plots for trial snack6
+2025-06-11 13:14:47,182 - src.cli - INFO - RSM simulation completed. Results: 1 trials processed

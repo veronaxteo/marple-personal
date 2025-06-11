@@ -11,8 +11,7 @@ from typing import Dict, List, Tuple, Set
 from multiprocessing import Pool
 
 from src.utils.math_utils import softmax_list_vals, normalized_slider_prediction
-from src.core.evidence.audio import single_segment_audio_likelihood
-from src.cfg import SimulationConfig, PathSamplingTask
+from src.cfg import PathSamplingTask
 
 
 def calculate_visual_utilities(task: PathSamplingTask, sequences_p2: List) -> Tuple[np.ndarray, List]:
@@ -30,20 +29,36 @@ def calculate_visual_utilities(task: PathSamplingTask, sequences_p2: List) -> Tu
     
     if task.agent_type == 'sophisticated':
         visual_slider_map = getattr(task.config.evidence, 'visual_slider_map', {})
-        if not visual_slider_map:
-            logging.warning("Visual slider map not found for sophisticated agent.")
-
         for idx, p2_seq in enumerate(sequences_p2):
+            # First find the best framing spot based on slider map
             optimal_spot, best_slider = _find_best_framing_spot(p2_seq, task.agent_id, visual_slider_map)
-            optimal_plant_spots[idx] = optimal_spot
+            # print(f"Optimal spot: {optimal_spot}")
+            # print(f"Best slider: {best_slider}")
+            
+            # Then get a noisy version of the optimal spot for actual planting
+            if optimal_spot is not None:
+                valid_plant_spots = set(visual_slider_map.keys())
+                noisy_plant_spot = get_noisy_plant_spot(optimal_spot, task.config.evidence.crumb_planting_sigma, valid_plant_spots)
+                optimal_plant_spots[idx] = noisy_plant_spot
+            else:
+                optimal_plant_spots[idx] = None
             
             path_framing_metric_scaled = best_slider / 100.0
-            utility_factor = task.config.sampling.cost_weight * (1 - rescaled_lengths[idx])
             
+            # Path utility
+            # Agent A: 1 - path_length + k * detective_pred (higher detective_pred -> accuse B)
+            # Agent B: 1 - path_length - k * detective_pred (higher detective_pred -> accuse A)
             if task.agent_id == 'A':
-                utility = utility_factor + (1 - task.config.sampling.cost_weight) * path_framing_metric_scaled
+                # print(f"Agent A path length: {rescaled_lengths[idx]}")
+                # print(f"Agent A path framing metric: {path_framing_metric_scaled}")
+                # print(f"Agent A cost weight: {task.config.sampling.cost_weight}")
+                utility = (1 - rescaled_lengths[idx]) + task.config.sampling.cost_weight * path_framing_metric_scaled
+                # print(f"Agent A utility: {utility}")
+                # breakpoint()
             else:
-                utility = utility_factor - (1 - task.config.sampling.cost_weight) * path_framing_metric_scaled
+                utility = (1 - rescaled_lengths[idx]) - task.config.sampling.cost_weight * path_framing_metric_scaled
+                # print(f"Agent B utility: {utility}")
+                
             utilities.append(utility)
     
     elif task.agent_type in ['naive', 'uniform']:
@@ -89,67 +104,6 @@ def calculate_audio_utilities(
     return length_pair_metadata, probabilities
 
 
-def calculate_multimodal_utilities(
-    task: PathSamplingTask,
-    paths_to_fridge: List,
-    paths_from_fridge: List
-) -> Tuple[np.ndarray, List, List]:
-    """Calculate utilities for multimodal path pairs for sophisticated agents."""
-    logger = logging.getLogger(__name__)
-    path_pairs = [(p_to, p_from) for p_to in paths_to_fridge for p_from in paths_from_fridge]
-    
-    if not path_pairs:
-        return np.array([]), [], []
-
-    # Get pre-computed slider maps
-    visual_slider_map = getattr(task.config.evidence, 'visual_slider_map', {})
-    audio_to_slider_map = getattr(task.config.evidence, 'audio_to_slider_map', {})
-    audio_from_slider_map = getattr(task.config.evidence, 'audio_from_slider_map', {})
-
-    # Calculate costs and framing metrics for all path pairs
-    all_costs = []
-    all_framing_metrics = []
-    all_optimal_spots = []
-
-    for p_to, p_from in path_pairs:
-        # Cost factor
-        cost = (len(p_to) - 1) + (len(p_from) - 1)
-        all_costs.append(cost)
-
-        # Audio framing
-        len_to = len(p_to) - 1
-        len_from = len(p_from) - 1
-        slider_to = audio_to_slider_map.get(len_to, 0)
-        slider_from = audio_from_slider_map.get(len_from, 0)
-        framing_metric_audio = (slider_to + slider_from) / 2.0
-
-        # Visual framing
-        optimal_spot, best_visual_slider = _find_best_framing_spot(p_from, task.agent_id, visual_slider_map)
-        all_optimal_spots.append(optimal_spot)
-        framing_metric_visual = best_visual_slider
-
-        # Combine framing metrics
-        framing_metric = (framing_metric_audio + framing_metric_visual) / 2.0
-        all_framing_metrics.append(framing_metric / 100.0)
-
-    # Rescale all costs to [0, 1]
-    rescaled_costs = rescale_costs(np.array(all_costs))
-
-    # Calculate final utilities using rescaled costs
-    utilities = []
-    for i in range(len(path_pairs)):
-        cost_factor = task.config.sampling.cost_weight * (1 - rescaled_costs[i])
-        framing_factor = (1 - task.config.sampling.cost_weight) * all_framing_metrics[i]
-        
-        if task.agent_id == 'A':
-            utility = cost_factor + framing_factor
-        else:
-            utility = cost_factor - framing_factor
-        utilities.append(utility)
-        
-    return np.array(utilities), all_optimal_spots, path_pairs
-
-
 def calculate_to_fridge_utilities(task: PathSamplingTask, paths_to_fridge: List) -> np.ndarray:
     """Calculate utilities for 'to fridge' paths using pre-computed likelihoods."""
     audio_to_lik_map = getattr(task.config.evidence, 'audio_to_likelihood_map', {})
@@ -165,13 +119,9 @@ def calculate_to_fridge_utilities(task: PathSamplingTask, paths_to_fridge: List)
         lik_A_audio, lik_B_audio = audio_to_lik_map.get(path_len, (0.0, 0.0))
         framing_metric = normalized_slider_prediction(lik_A_audio, lik_B_audio) / 100.0
         
-        cost_factor = task.config.sampling.cost_weight * (1 - rescaled_costs[i])
-        framing_factor = (1 - task.config.sampling.cost_weight) * framing_metric
-
-        if task.agent_id == 'A':
-            utility = cost_factor + framing_factor
-        else:
-            utility = cost_factor - framing_factor
+        # (1 - path_length) + k * detective_pred (agent A), (1 - path_length) - k * detective_pred (agent B)
+        utility = (1 - rescaled_costs[i]) + task.config.sampling.cost_weight * framing_metric if task.agent_id == 'A' \
+            else (1 - rescaled_costs[i]) - task.config.sampling.cost_weight * framing_metric
         utilities.append(utility)
 
     return np.array(utilities)
@@ -210,13 +160,9 @@ def _calculate_utility_for_single_from_path(args: Tuple) -> Tuple[float, any]:
     # Calculate the final slider prediction from the combined likelihoods
     framing_metric = normalized_slider_prediction(total_multimodal_lik_A, total_multimodal_lik_B) / 100.0
     
-    cost_factor = config.sampling.cost_weight * (1 - rescaled_costs[i])
-    framing_factor = (1 - config.sampling.cost_weight) * framing_metric
-
-    if agent_id == 'A':
-        utility = cost_factor + framing_factor
-    else:
-        utility = cost_factor - framing_factor
+    # (1 - path_length) + k * detective_pred (agent A), (1 - path_length) - k * detective_pred (agent B)
+    utility = (1 - rescaled_costs[i]) + config.sampling.cost_weight * framing_metric if agent_id == 'A' \
+        else (1 - rescaled_costs[i]) - config.sampling.cost_weight * framing_metric
         
     return utility, optimal_spot
 
@@ -227,14 +173,12 @@ def calculate_from_fridge_utilities(task: PathSamplingTask, paths_from_fridge: L
     """
     costs = np.array([len(p) - 1 for p in paths_from_fridge])
     rescaled_costs = rescale_costs(costs)
-
     pool_args = [(i, path, task, rescaled_costs) for i, path in enumerate(paths_from_fridge)]
     
     with Pool() as pool:
         results = pool.map(_calculate_utility_for_single_from_path, pool_args)
 
     utilities, optimal_plant_spots = zip(*results)
-
     return np.array(utilities), list(optimal_plant_spots)
 
 
@@ -257,33 +201,32 @@ def calculate_single_audio_utility(
     """Calculate utility for a single audio path length pair."""
     
     if task.agent_type == 'sophisticated':
-        to_slider_map = getattr(task.config.evidence, 'audio_to_slider_map', {})
-        from_slider_map = getattr(task.config.evidence, 'audio_from_slider_map', {})
+        # Get likelihood maps instead of slider maps
+        audio_to_lik_map = getattr(task.config.evidence, 'audio_to_likelihood_map', {})
+        audio_from_lik_map = getattr(task.config.evidence, 'audio_from_likelihood_map', {})
 
         eval_steps_to = length_meta['eval_steps_to']
         eval_steps_from = length_meta['eval_steps_from']
         
-        slider_to = to_slider_map.get(eval_steps_to, 0)
-        slider_from = from_slider_map.get(eval_steps_from, 0)
+        # Get likelihoods for both path segments
+        lik_A_to, lik_B_to = audio_to_lik_map.get(eval_steps_to, (0.0, 0.0))
+        lik_A_from, lik_B_from = audio_from_lik_map.get(eval_steps_from, (0.0, 0.0))
         
-        # Combine audio framing scores by multiplying their likelihood-space equivalents
-        # This is a bit of a heuristic to combine sliders.
-        # A simple average is slider_to + slider_from / 2
-        framing_metric = (slider_to + slider_from) / 2.0
-        framing_metric_scaled = framing_metric / 100.0 
+        # Combine likelihoods by multiplying
+        total_lik_A = lik_A_to * lik_A_from
+        total_lik_B = lik_B_to * lik_B_from
         
-        cost_factor = task.config.sampling.cost_weight * (1 - rescaled_cost)
-        framing_factor = (1 - task.config.sampling.cost_weight) * framing_metric_scaled
+        # Convert combined likelihoods back to slider prediction
+        framing_metric = normalized_slider_prediction(total_lik_A, total_lik_B) / 100.0
         
-        if task.agent_id == 'A':
-            utility = cost_factor + framing_factor
-        else:
-            utility = cost_factor - framing_factor
+        # (path_length) + k * detective_pred (agent A), (path_length) - k * detective_pred (agent B)
+        utility = rescaled_cost + task.config.sampling.cost_weight * framing_metric if task.agent_id == 'A' \
+            else rescaled_cost - task.config.sampling.cost_weight * framing_metric
         
         return utility
     
     elif task.agent_type in ['naive', 'uniform']:
-        return task.config.sampling.cost_weight * (1 - rescaled_cost)
+        return rescaled_cost
 
 
 def utilities_to_probabilities(
@@ -298,9 +241,6 @@ def utilities_to_probabilities(
         temperature = task.config.sampling.naive_temp
     else:
         temperature = task.config.sampling.naive_temp
-    
-    if len(utilities) == 0:
-        return np.array([])
 
     if temperature <= 0:
         probabilities = np.zeros_like(utilities, dtype=float)
@@ -325,8 +265,6 @@ def rescale_costs(costs: np.ndarray) -> np.ndarray:
 
 def calculate_length_based_probabilities(paths: List, task: PathSamplingTask) -> np.ndarray:
     """Calculate sampling probabilities for a list of paths based on their lengths."""
-    if not paths:
-        return np.array([])
     costs = np.array([len(p) - 1 for p in paths])
     # Higher utility for shorter paths
     utilities = 1.0 - rescale_costs(costs)
@@ -339,31 +277,22 @@ def _find_best_framing_spot(
     visual_slider_map: Dict[Tuple[int, int], float]
 ) -> Tuple[any, float]:
     """Finds the best coordinate on a path to frame the other agent."""
-    
-    # We can only plant on the path itself.
-    # We also need to filter out non-kitchen/door locations, which is implicitly
-    # handled by the fact that the visual_slider_map should only contain valid spots.
     valid_plant_spots = [coord for coord in path if coord in visual_slider_map]
 
-    # Get the slider values for just the valid spots on the path
+    # Get the slider values for valid spots on path
     slider_values_on_path = {spot: visual_slider_map[spot] for spot in valid_plant_spots}
 
     # Agent A wants to maximize the slider, Agent B wants to minimize 
-    if agent_id == 'A':
-        best_spot = max(slider_values_on_path, key=slider_values_on_path.get)
-    else: # Agent B
-        best_spot = min(slider_values_on_path, key=slider_values_on_path.get)
+    best_spot = max(slider_values_on_path, key=slider_values_on_path.get) if agent_id == 'A' \
+        else min(slider_values_on_path, key=slider_values_on_path.get)
         
     best_slider_value = slider_values_on_path[best_spot]
-    
     return best_spot, best_slider_value
 
 
 def get_noisy_plant_spot(optimal_spot: Tuple[int, int], 
                          sigma: float, 
                          valid_plant_spots: Set[Tuple[int, int]]) -> Tuple[int, int]:
-    logger = logging.getLogger(__name__)
-
     if sigma <= 0:
         return optimal_spot
 

@@ -7,8 +7,8 @@ sampling:
   num_detective_paths: 1000
   seed: 42
   naive_temp: 0.05
-  sophisticated_temp: 0.05
-  cost_weight: 0.3
+  sophisticated_temp: 0.1
+  cost_weight: 20
 
 # Evidence
 evidence:

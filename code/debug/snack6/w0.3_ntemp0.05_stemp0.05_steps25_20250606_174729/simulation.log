@@ -1,0 +1,69 @@
+2025-06-06 17:47:29,991 - src.cli - INFO - Starting RSM simulation - Log: /Users/veronateo/marple-personal/code/debug/snack6/w0.3_ntemp0.05_stemp0.05_steps25_20250606_174729/simulation.log
+2025-06-06 17:47:29,991 - src.cli - INFO - Saved metadata to /Users/veronateo/marple-personal/code/debug/snack6/w0.3_ntemp0.05_stemp0.05_steps25_20250606_174729/metadata.json
+2025-06-06 17:47:29,991 - src.cli - INFO - Trials to run: ['snack6_A1.json']
+2025-06-06 17:47:29,991 - RSMSimulator - INFO - Starting RSMSimulator simulation with multimodal evidence
+2025-06-06 17:47:29,991 - RSMSimulator - INFO - ===== Running Trial: snack6 =====
+2025-06-06 17:47:29,992 - RSMSimulator - INFO - Generating 50 suspect paths and 1000 detective paths
+2025-06-06 17:47:30,058 - src.core.world.utils - INFO - Loaded simple path sequences for snack6 from cache
+2025-06-06 17:47:30,058 - Suspect[suspect_rsm] - INFO - Initialized Suspect with suspect data
+2025-06-06 17:47:30,058 - Detective[detective_rsm] - INFO - Initialized Detective with detective data
+2025-06-06 17:47:30,058 - RSMSimulator - INFO - --- Simulating Level 1 (Naive Agent) ---
+2025-06-06 17:47:30,058 - Suspect[suspect_rsm] - INFO - Simulating naive suspect paths using multimodal evidence
+2025-06-06 17:47:31,201 - src.utils.io_utils - INFO - Saved 100 sampled paths to /Users/veronateo/marple-personal/code/debug/snack6/w0.3_ntemp0.05_stemp0.05_steps25_20250606_174729/snack6_sampled_paths_naive.csv
+2025-06-06 17:47:31,201 - Suspect[suspect_rsm] - INFO - Simulating naive suspect paths using multimodal evidence
+2025-06-06 17:47:32,322 - Detective[detective_rsm] - INFO - Simulating detective modeling naive suspects using multimodal evidence
+2025-06-06 17:47:32,322 - MultimodalEvidenceProcessor - INFO - Computing MULTIMODAL detective predictions for naive agents
+2025-06-06 17:47:32,322 - VisualEvidenceProcessor - INFO - Computing VISUAL detective predictions for naive agents
+2025-06-06 17:47:32,372 - src.core.evidence.audio - INFO - Agent shortest paths: A->fridge=12, B->fridge=12
+2025-06-06 17:47:32,372 - src.core.evidence.audio - INFO - Agent shortest paths: fridge->A=12, fridge->B=12
+2025-06-06 17:47:32,372 - src.core.evidence.audio - INFO - Using minimum feasible steps: to_fridge>=12, from_fridge>=12
+2025-06-06 17:47:32,372 - src.core.evidence.audio - INFO - Generated 9 ground truth audio sequences
+2025-06-06 17:47:35,413 - src.utils.evidence_utils - INFO - Saved 477 detective predictions to snack6_naive_multimodal_predictions.json
+2025-06-06 17:47:35,732 - RSMSimulator - INFO - Smoothing visual likelihood maps (sigma=1.0)
+2025-06-06 17:47:35,733 - RSMSimulator - INFO - Visual and Audio models loaded for multimodal simulation.
+2025-06-06 17:47:35,733 - RSMSimulator - INFO - --- Simulating Level 2 (Sophisticated Agent) ---
+2025-06-06 17:47:35,733 - Suspect[suspect_rsm] - INFO - Simulating sophisticated suspect paths using multimodal evidence
+2025-06-06 17:47:35,733 - PathSampler - INFO - No cache found. Computing utilities for ('A', 'sophisticated', 'multimodal')
+2025-06-06 17:47:35,733 - PathSampler - INFO - Computing utilities for 26372 paths to fridge.
+2025-06-06 17:47:35,760 - PathSampler - INFO - Finished computing utilities for 26372 paths to fridge.
+2025-06-06 17:47:35,760 - PathSampler - INFO - Computing utilities for 26372 paths from fridge.
+2025-06-06 17:47:38,943 - PathSampler - INFO - Finished computing utilities for 26372 paths from fridge.
+2025-06-06 17:47:39,166 - PathSampler - INFO - No cache found. Computing utilities for ('B', 'sophisticated', 'multimodal')
+2025-06-06 17:47:39,166 - PathSampler - INFO - Computing utilities for 89896 paths to fridge.
+2025-06-06 17:47:39,263 - PathSampler - INFO - Finished computing utilities for 89896 paths to fridge.
+2025-06-06 17:47:39,264 - PathSampler - INFO - Computing utilities for 89896 paths from fridge.
+2025-06-06 17:47:46,246 - PathSampler - INFO - Finished computing utilities for 89896 paths from fridge.
+2025-06-06 17:47:46,969 - src.utils.io_utils - INFO - Saved 100 sampled paths to /Users/veronateo/marple-personal/code/debug/snack6/w0.3_ntemp0.05_stemp0.05_steps25_20250606_174729/snack6_sampled_paths_sophisticated.csv
+2025-06-06 17:47:46,970 - Suspect[suspect_rsm] - INFO - Simulating sophisticated suspect paths using multimodal evidence
+2025-06-06 17:47:46,970 - PathSampler - INFO - Using cached utilities for ('A', 'sophisticated', 'multimodal')
+2025-06-06 17:47:47,182 - PathSampler - INFO - Using cached utilities for ('B', 'sophisticated', 'multimodal')
+2025-06-06 17:47:47,959 - Detective[detective_rsm] - INFO - Simulating detective modeling sophisticated suspects using multimodal evidence
+2025-06-06 17:47:47,959 - MultimodalEvidenceProcessor - INFO - Computing MULTIMODAL detective predictions for sophisticated agents
+2025-06-06 17:47:47,959 - VisualEvidenceProcessor - INFO - Computing VISUAL detective predictions for sophisticated agents
+2025-06-06 17:47:47,959 - VisualEvidenceProcessor - INFO - Smoothing visual likelihood maps (sigma=1.0)
+2025-06-06 17:47:47,960 - src.core.evidence.audio - INFO - Agent shortest paths: A->fridge=12, B->fridge=12
+2025-06-06 17:47:47,960 - src.core.evidence.audio - INFO - Agent shortest paths: fridge->A=12, fridge->B=12
+2025-06-06 17:47:47,960 - src.core.evidence.audio - INFO - Using minimum feasible steps: to_fridge>=12, from_fridge>=12
+2025-06-06 17:47:47,960 - src.core.evidence.audio - INFO - Generated 9 ground truth audio sequences
+2025-06-06 17:47:51,186 - src.utils.evidence_utils - INFO - Saved 477 detective predictions to snack6_sophisticated_multimodal_predictions.json
+2025-06-06 17:47:51,187 - RSMSimulator - INFO - ===== Finished Trial: snack6 =====
+2025-06-06 17:47:51,187 - RSMSimulator - INFO - RSMSimulator simulation completed
+2025-06-06 17:47:51,187 - src.cli - INFO - Generating automatic plots for simulation results...
+2025-06-06 17:47:51,187 - src.analysis.plot - INFO - Creating multimodal evidence plots for trial snack6 in /Users/veronateo/marple-personal/code/debug/snack6/w0.3_ntemp0.05_stemp0.05_steps25_20250606_174729
+2025-06-06 17:47:51,487 - src.analysis.plot - INFO - Saved heatmap for Agent A to /Users/veronateo/marple-personal/code/debug/snack6/w0.3_ntemp0.05_stemp0.05_steps25_20250606_174729/plots/heatmap_return_from_fridge_agent_A_snack6_naive.png
+2025-06-06 17:47:51,657 - src.analysis.plot - INFO - Saved heatmap for Agent B to /Users/veronateo/marple-personal/code/debug/snack6/w0.3_ntemp0.05_stemp0.05_steps25_20250606_174729/plots/heatmap_return_from_fridge_agent_B_snack6_naive.png
+2025-06-06 17:47:51,837 - src.analysis.plot - INFO - Saved heatmap for Agent A to /Users/veronateo/marple-personal/code/debug/snack6/w0.3_ntemp0.05_stemp0.05_steps25_20250606_174729/plots/heatmap_to_fridge_agent_A_snack6_naive.png
+2025-06-06 17:47:52,004 - src.analysis.plot - INFO - Saved heatmap for Agent B to /Users/veronateo/marple-personal/code/debug/snack6/w0.3_ntemp0.05_stemp0.05_steps25_20250606_174729/plots/heatmap_to_fridge_agent_B_snack6_naive.png
+2025-06-06 17:47:52,179 - src.analysis.plot - INFO - Saved heatmap for Agent A to /Users/veronateo/marple-personal/code/debug/snack6/w0.3_ntemp0.05_stemp0.05_steps25_20250606_174729/plots/heatmap_return_from_fridge_agent_A_snack6_sophisticated.png
+2025-06-06 17:47:52,354 - src.analysis.plot - INFO - Saved heatmap for Agent B to /Users/veronateo/marple-personal/code/debug/snack6/w0.3_ntemp0.05_stemp0.05_steps25_20250606_174729/plots/heatmap_return_from_fridge_agent_B_snack6_sophisticated.png
+2025-06-06 17:47:52,615 - src.analysis.plot - INFO - Saved heatmap for Agent A to /Users/veronateo/marple-personal/code/debug/snack6/w0.3_ntemp0.05_stemp0.05_steps25_20250606_174729/plots/heatmap_to_fridge_agent_A_snack6_sophisticated.png
+2025-06-06 17:47:52,801 - src.analysis.plot - INFO - Saved heatmap for Agent B to /Users/veronateo/marple-personal/code/debug/snack6/w0.3_ntemp0.05_stemp0.05_steps25_20250606_174729/plots/heatmap_to_fridge_agent_B_snack6_sophisticated.png
+2025-06-06 17:47:52,977 - src.analysis.plot - INFO - Saved crumb planting heatmap for Agent A to /Users/veronateo/marple-personal/code/debug/snack6/w0.3_ntemp0.05_stemp0.05_steps25_20250606_174729/plots/crumb_planting_heatmap_agent_A_snack6.png
+2025-06-06 17:47:53,187 - src.analysis.plot - INFO - Saved crumb planting heatmap for Agent B to /Users/veronateo/marple-personal/code/debug/snack6/w0.3_ntemp0.05_stemp0.05_steps25_20250606_174729/plots/crumb_planting_heatmap_agent_B_snack6.png
+2025-06-06 17:47:53,348 - src.analysis.plot - INFO - Saved multimodal visual predictions heatmap to /Users/veronateo/marple-personal/code/debug/snack6/w0.3_ntemp0.05_stemp0.05_steps25_20250606_174729/plots/detective_multimodal_visual_preds_heatmap_naive_snack6.png
+2025-06-06 17:47:53,462 - src.analysis.plot - INFO - Saved multimodal audio predictions heatmap to /Users/veronateo/marple-personal/code/debug/snack6/w0.3_ntemp0.05_stemp0.05_steps25_20250606_174729/plots/detective_multimodal_audio_preds_heatmap_naive_snack6.png
+2025-06-06 17:47:53,631 - src.analysis.plot - INFO - Saved multimodal visual predictions heatmap to /Users/veronateo/marple-personal/code/debug/snack6/w0.3_ntemp0.05_stemp0.05_steps25_20250606_174729/plots/detective_multimodal_visual_preds_heatmap_sophisticated_snack6.png
+2025-06-06 17:47:53,750 - src.analysis.plot - INFO - Saved multimodal audio predictions heatmap to /Users/veronateo/marple-personal/code/debug/snack6/w0.3_ntemp0.05_stemp0.05_steps25_20250606_174729/plots/detective_multimodal_audio_preds_heatmap_sophisticated_snack6.png
+2025-06-06 17:47:53,750 - src.analysis.plot - INFO - Completed multimodal evidence plots for snack6
+2025-06-06 17:47:53,750 - src.cli - INFO - Generated multimodal plots for trial snack6
+2025-06-06 17:47:53,750 - src.cli - INFO - RSM simulation completed. Results: 1 trials processed

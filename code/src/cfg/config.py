@@ -21,7 +21,7 @@ class SamplingConfig:
     naive_temp: float = 0.01
     sophisticated_temp: float = 0.01
     
-    cost_weight: float = 0.1
+    cost_weight: float = 1.0
     
     def __post_init__(self):
         # Inline validation
@@ -35,8 +35,8 @@ class SamplingConfig:
             raise ValueError("naive_temp must be positive")
         if self.sophisticated_temp <= 0:
             raise ValueError("sophisticated_temp must be positive")
-        if not (0.0 <= self.cost_weight <= 1.0):
-            raise ValueError("cost_weight must be between 0.0 and 1.0")
+        if not (self.cost_weight >= 0.0):
+            raise ValueError("cost_weight must be non-negative")
 
 
 @dataclass
@@ -175,7 +175,7 @@ class SimulationConfig:
     def create_visual_config(
         cls, 
         trial_name: str, 
-        cost_weight: float = 0.1, 
+        cost_weight: float = 1.0, 
         naive_temp: float = 0.01,
         sophisticated_temp: float = 0.01,
         max_steps: int = 25,
@@ -201,7 +201,7 @@ class SimulationConfig:
     def create_audio_config(
         cls,
         trial_name: str,
-        cost_weight: float = 0.1,
+        cost_weight: float = 1.0,
         naive_temp: float = 0.01,
         sophisticated_temp: float = 0.01,
         max_steps: int = 25,
@@ -231,7 +231,7 @@ class SimulationConfig:
     def create_multimodal_config(
         cls,
         trial_name: str,
-        cost_weight: float = 0.1,
+        cost_weight: float = 1.0,
         naive_temp: float = 0.01,
         sophisticated_temp: float = 0.01,
         max_steps: int = 25,
