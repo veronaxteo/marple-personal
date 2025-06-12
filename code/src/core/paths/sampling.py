@@ -74,6 +74,9 @@ class PathSampler:
     def _sample_paths_naive(self, task: PathSamplingTask) -> Dict:
         """Naive sampling is always based on the full journey's path length."""
         p_start_door, p_door_fridge, p_fridge_door, p_door_start = task.simple_path_sequences
+        # print(f"p_start_door: {p_start_door}")
+        # breakpoint()
+
         paths_to_fridge = [p1[:-1] + p2 for p1 in p_start_door for p2 in p_door_fridge]
         paths_from_fridge = [p3[:-1] + p4 for p3 in p_fridge_door for p4 in p_door_start]
         

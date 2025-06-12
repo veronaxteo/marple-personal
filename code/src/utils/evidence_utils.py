@@ -58,9 +58,6 @@ class VisualEvidenceProcessor(EvidenceProcessor):
         self.logger.info(f"Computing VISUAL detective predictions for {task.agent_type_being_simulated} agents")
         
         possible_crumb_coords = task.world.get_valid_kitchen_crumb_coords()
-        if not possible_crumb_coords:
-            self.logger.warning("No valid crumb coordinates found")
-            return PredictionResult({}, {}, {}, [])
         
         # Access data from the dictionary of lists
         agent_A_data = task.sampled_data.get('A', {})
@@ -102,27 +99,26 @@ class VisualEvidenceProcessor(EvidenceProcessor):
             )
             raw_likelihood_map_B[crumb_coord] = likelihood_B
         
-        # Apply smoothing for sophisticated agents
+        # Apply smoothing for both naive and sophisticated agents
         final_likelihood_map_A = raw_likelihood_map_A
         final_likelihood_map_B = raw_likelihood_map_B
         
-        if task.agent_type_being_simulated == 'sophisticated':
-            detective_sigma = task.config.evidence.sophisticated_detective_sigma
-            if detective_sigma > 0:
-                self.logger.info(f"Smoothing visual likelihood maps (sigma={detective_sigma})")
-                if raw_likelihood_map_A and raw_likelihood_map_B:
-                    sigma_steps = max(1, int(detective_sigma))
-                    neighbors = compute_all_graph_neighbors(task.world, list(raw_likelihood_map_A.keys()))
-                    final_likelihood_map_A = smooth_likelihoods(raw_likelihood_map_A, sigma_steps, neighbors)
-                    final_likelihood_map_B = smooth_likelihoods(raw_likelihood_map_B, sigma_steps, neighbors)
-                    
-                    try:
-                        # Only attempt to plot if a logging directory is provided
-                        if task.param_log_dir:
-                            from src.analysis.plot import plot_smoothing_comparison
-                            plot_smoothing_comparison(task.trial_name, task.param_log_dir, raw_likelihood_map_A, raw_likelihood_map_B, task.world, detective_sigma)
-                    except ImportError:
-                        self.logger.warning("Could not import plot_smoothing_comparison for debugging plots")
+        detective_sigma = task.config.evidence.naive_detective_sigma if task.agent_type_being_simulated == 'naive' \
+            else task.config.evidence.sophisticated_detective_sigma
+        
+        if detective_sigma > 0:
+            self.logger.info(f"Smoothing visual likelihood maps (sigma={detective_sigma})")
+            if raw_likelihood_map_A and raw_likelihood_map_B:
+                sigma_steps = max(1, int(detective_sigma))
+                neighbors = compute_all_graph_neighbors(task.world, list(raw_likelihood_map_A.keys()))
+                final_likelihood_map_A = smooth_likelihoods(raw_likelihood_map_A, sigma_steps, neighbors)
+                final_likelihood_map_B = smooth_likelihoods(raw_likelihood_map_B, sigma_steps, neighbors)
+                
+                try:
+                    from src.analysis.plot import plot_smoothing_comparison
+                    plot_smoothing_comparison(task.trial_name, task.param_log_dir, raw_likelihood_map_A, raw_likelihood_map_B, task.agent_type_being_simulated, task.world, detective_sigma)
+                except ImportError:
+                    self.logger.warning("Could not import plot_smoothing_comparison for debugging plots")
         
         prediction_data = []
         for crumb_coord in possible_crumb_coords:
@@ -144,8 +140,7 @@ class VisualEvidenceProcessor(EvidenceProcessor):
             for coord in possible_crumb_coords
         }
         
-        if task.param_log_dir:
-            save_detective_predictions(prediction_data, task)
+        save_detective_predictions(prediction_data, task)
         
         return PredictionResult(
             predictions=predictions,
@@ -197,8 +192,7 @@ class AudioEvidenceProcessor(EvidenceProcessor):
                 'prediction': prediction
             })
         
-        if task.param_log_dir:
-            save_detective_predictions(prediction_data, task)
+        save_detective_predictions(prediction_data, task)
         
         return PredictionResult(
             predictions=predictions,
@@ -313,8 +307,7 @@ class MultimodalEvidenceProcessor(EvidenceProcessor):
         model_A = {'visual': visual_model_A, 'audio': (agent_A_to_steps, agent_A_from_steps)}
         model_B = {'visual': visual_model_B, 'audio': (agent_B_to_steps, agent_B_from_steps)}
         
-        if task.param_log_dir:
-            save_detective_predictions(prediction_data, task)
+        save_detective_predictions(prediction_data, task)
 
         return PredictionResult(
             predictions=predictions,

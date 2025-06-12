@@ -12,11 +12,11 @@ sampling:
 
 # Evidence
 evidence:
-  naive_detective_sigma: 1.0 
+  naive_detective_sigma: 0.5 
   crumb_planting_sigma: 1.0
-  sophisticated_detective_sigma: 1.0
-  visual_naive_likelihood_alpha: 5.0
-  visual_sophisticated_likelihood_alpha: 5.0
+  sophisticated_detective_sigma: 2.0
+  visual_naive_likelihood_alpha: 1.0
+  visual_sophisticated_likelihood_alpha: 1.0
 
 # Simulation
 simulation:

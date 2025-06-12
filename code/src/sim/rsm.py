@@ -43,7 +43,6 @@ class RSMSimulator(BaseSimulator):
 
         # Store naive models on config for sophisticated agents to use
         if self.config.evidence.evidence_type == 'visual':
-            # For visual, we store the slider map directly
             self.config.evidence.visual_slider_map = create_visual_slider_map(naive_A_model, naive_B_model)
             
         elif self.config.evidence.evidence_type == 'audio':
@@ -53,11 +52,11 @@ class RSMSimulator(BaseSimulator):
             self.config.evidence.audio_from_slider_map = from_map
 
         elif self.config.evidence.evidence_type == 'multimodal':
-            # For multimodal, we create and store all three maps
             visual_model_A = naive_A_model['visual']
             visual_model_B = naive_B_model['visual']
-            self.config.evidence.visual_slider_map = create_visual_slider_map(visual_model_A, visual_model_B)
-            
+            self.config.evidence.naive_A_visual_likelihoods_map = visual_model_A
+            self.config.evidence.naive_B_visual_likelihoods_map = visual_model_B
+
             audio_model_A = naive_A_model['audio']
             audio_model_B = naive_B_model['audio']
 
@@ -72,7 +71,6 @@ class RSMSimulator(BaseSimulator):
             self.config.evidence.audio_from_likelihood_map = from_lik_map
 
         # Process naive models for sophisticated suspects
-        # Note: smoothing only done after naive detective predictions (smoothing for sophisticated agents only)
         self._process_naive_models_for_sophisticated(naive_A_model, naive_B_model, world)
         
         # Level 2: Sophisticated agents
@@ -95,19 +93,9 @@ class RSMSimulator(BaseSimulator):
     def _process_naive_models_for_sophisticated(self, naive_A_model, naive_B_model, world):
         """Process naive detective models for use by sophisticated suspects."""
         if self.config.evidence.evidence_type == 'visual':
-            smoothed_A_map = naive_A_model
-            smoothed_B_map = naive_B_model
-            
-            if self.config.evidence.naive_detective_sigma > 0:
-                self.logger.info(f"Smoothing visual likelihood maps (sigma={self.config.evidence.naive_detective_sigma})")
-                # Smoothing
-                sigma_steps = max(1, int(self.config.evidence.naive_detective_sigma))
-                neighbors = compute_all_graph_neighbors(world, naive_A_model.keys())
-                smoothed_A_map = smooth_likelihoods(naive_A_model, sigma_steps, neighbors)
-                smoothed_B_map = smooth_likelihoods(naive_B_model, sigma_steps, neighbors)
-            
-            self.config.evidence.naive_A_visual_likelihoods_map = smoothed_A_map
-            self.config.evidence.naive_B_visual_likelihoods_map = smoothed_B_map
+            # Smoothed visual likelihoods
+            self.config.evidence.naive_A_visual_likelihoods_map = naive_A_model
+            self.config.evidence.naive_B_visual_likelihoods_map = naive_B_model
             
         elif self.config.evidence.evidence_type == 'audio':
             # Store audio step models for sophisticated suspects
@@ -116,28 +104,18 @@ class RSMSimulator(BaseSimulator):
             self.config.evidence.naive_B_to_fridge_steps_model = naive_B_model[0]
             self.config.evidence.naive_B_from_fridge_steps_model = naive_B_model[1]
             
-            self.logger.info(f"Audio models: A_to({len(self.config.evidence.naive_A_to_fridge_steps_model)}), "
-                           f"A_from({len(self.config.evidence.naive_A_from_fridge_steps_model)}), "
-                           f"B_to({len(self.config.evidence.naive_B_to_fridge_steps_model)}), "
-                           f"B_from({len(self.config.evidence.naive_B_from_fridge_steps_model)})")
+            # self.logger.info(f"Audio models: A_to({len(self.config.evidence.naive_A_to_fridge_steps_model)}), "
+            #                f"A_from({len(self.config.evidence.naive_A_from_fridge_steps_model)}), "
+            #                f"B_to({len(self.config.evidence.naive_B_to_fridge_steps_model)}), "
+            #                f"B_from({len(self.config.evidence.naive_B_from_fridge_steps_model)})")
 
         elif self.config.evidence.evidence_type == 'multimodal':
             # Visual component
             naive_A_visual_model = naive_A_model['visual']
             naive_B_visual_model = naive_B_model['visual']
             
-            smoothed_A_map = naive_A_visual_model
-            smoothed_B_map = naive_B_visual_model
-            
-            if self.config.evidence.naive_detective_sigma > 0:
-                self.logger.info(f"Smoothing visual likelihood maps (sigma={self.config.evidence.naive_detective_sigma})")
-                sigma_steps = max(1, int(self.config.evidence.naive_detective_sigma))
-                neighbors = compute_all_graph_neighbors(world, naive_A_visual_model.keys())
-                smoothed_A_map = smooth_likelihoods(naive_A_visual_model, sigma_steps, neighbors)
-                smoothed_B_map = smooth_likelihoods(naive_B_visual_model, sigma_steps, neighbors)
-            
-            self.config.evidence.naive_A_visual_likelihoods_map = smoothed_A_map
-            self.config.evidence.naive_B_visual_likelihoods_map = smoothed_B_map
+            self.config.evidence.naive_A_visual_likelihoods_map = naive_A_visual_model
+            self.config.evidence.naive_B_visual_likelihoods_map = naive_B_visual_model
             
             # Audio component
             naive_A_audio_model = naive_A_model['audio']
@@ -147,5 +125,3 @@ class RSMSimulator(BaseSimulator):
             self.config.evidence.naive_A_from_fridge_steps_model = naive_A_audio_model[1]
             self.config.evidence.naive_B_to_fridge_steps_model = naive_B_audio_model[0]
             self.config.evidence.naive_B_from_fridge_steps_model = naive_B_audio_model[1]
-            
-            self.logger.info(f"Visual and Audio models loaded for multimodal simulation.")

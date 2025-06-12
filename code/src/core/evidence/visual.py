@@ -115,8 +115,10 @@ def get_visual_evidence_likelihood(crumb_coord_tuple: Tuple[int, int],
     if evidence_config:
         if agent_type_being_simulated == 'naive':
             alpha = evidence_config.visual_naive_likelihood_alpha
+            # print(f"naive_visual_alpha: {alpha}")
         else:
             alpha = evidence_config.visual_sophisticated_likelihood_alpha
+            # print(f"sophisticated_visual_alpha: {alpha}")
     else:
         logger.warning("EvidenceConfig not provided, using default alpha values.")
         alpha = 0.01 if agent_type_being_simulated == 'naive' else 1.0

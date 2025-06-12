@@ -6,13 +6,13 @@ sampling:
   num_suspect_paths: 50
   num_detective_paths: 1000
   seed: 42
-  naive_temp: 0.05
+  naive_temp: 0.1
   sophisticated_temp: 0.1
   cost_weight: 20
 
 # Evidence
 evidence:
-  audio_similarity_sigma: 0.1
+  audio_similarity_sigma: 0.3
   audio_gt_step_size: 2
 
 # Simulation

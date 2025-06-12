@@ -18,7 +18,7 @@ from ..utils.math_utils import smooth_likelihoods_old,compute_all_graph_neighbor
 
 
 def plot_smoothing_comparison(trial_name: str, param_log_dir: str, raw_likelihood_map_A: Dict, 
-                            raw_likelihood_map_B: Dict, world: World, sigma_value: float):
+                            raw_likelihood_map_B: Dict, agent_type: str, world: World, sigma_value: float):
     """
     Create side-by-side comparison plots of old vs new smoothing methods for debugging.
     This function can be called during simulation to visualize smoothing differences.
@@ -39,18 +39,18 @@ def plot_smoothing_comparison(trial_name: str, param_log_dir: str, raw_likelihoo
     
     _create_smoothing_comparison_plot(
         trial_name, plots_dir, raw_likelihood_map_A, old_smoothed_A, new_smoothed_A, 
-        world, "A", sigma_value, logger
+        world, "A", agent_type, sigma_value, logger
     )
     
     _create_smoothing_comparison_plot(
         trial_name, plots_dir, raw_likelihood_map_B, old_smoothed_B, new_smoothed_B,
-        world, "B", sigma_value, logger
+        world, "B", agent_type, sigma_value, logger
     )
 
 
 def _create_smoothing_comparison_plot(trial_name: str, plots_dir: str, raw_map: Dict, 
                                     old_smoothed: Dict, new_smoothed: Dict, world: World, 
-                                    agent_id: str, sigma_value: float, logger):
+                                    agent_id: str, agent_type: str, sigma_value: float, logger):
     """Helper function to create a single smoothing comparison plot"""
     
     plot_width = world.width
@@ -92,7 +92,7 @@ def _create_smoothing_comparison_plot(trial_name: str, plots_dir: str, raw_map: 
     plt.suptitle(f"Smoothing Comparison - Trial: {trial_name}, Agent {agent_id}", fontsize=16)
     plt.tight_layout()
     
-    comparison_filename = os.path.join(plots_dir, f"smoothing_comparison_agent_{agent_id}_{trial_name}.png")
+    comparison_filename = os.path.join(plots_dir, f"smoothing_comparison_agent_{agent_id}_{agent_type}.png")
     plt.savefig(comparison_filename, dpi=150, bbox_inches='tight')
     logger.info(f"Saved smoothing comparison plot for Agent {agent_id} to {comparison_filename}")
     plt.close()
@@ -151,7 +151,7 @@ def plot_suspect_paths_heatmap(trial_name: str, param_log_dir: str, agent_type_t
                 continue
 
         plt.figure(figsize=(12, 8)) 
-        cmap = 'Blues' if agent_id == 'A' else 'Greens'
+        cmap = 'Blues' if agent_id == 'A' else 'Reds'
         
         sns.heatmap(heatmap_grid, cmap=cmap, cbar=True, annot=True, fmt=".0f", 
                    linewidths=0.5, linecolor='gray')

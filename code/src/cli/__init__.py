@@ -171,11 +171,7 @@ def create_config_from_args(args):
         if args.max_steps is not None:
             defaults['sampling']['max_steps'] = args.max_steps
         
-        # Add evidence-specific parameters that aren't in YAML
-        if args.evidence == 'audio':
-            defaults['evidence']['audio_similarity_sigma'] = 0.1
-        elif args.evidence == 'multimodal':
-            defaults['evidence']['audio_similarity_sigma'] = 0.1
+        # Note: audio_similarity_sigma should come from YAML files
         
         # Create config from modified defaults
         sampling_config = SamplingConfig(**defaults.get('sampling', {}))
