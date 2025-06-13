@@ -38,7 +38,7 @@ def create_cli_parser():
     rsm_parser.add_argument('--name',
                            help='Experiment name (optional)')
     rsm_parser.add_argument('--log-dir', 
-                           default='../../results',
+                           default='results',
                            help='Base log directory')
     rsm_parser.add_argument('--override',
                            action='append',
@@ -49,7 +49,7 @@ def create_cli_parser():
     batch_parser.add_argument('config_file',
                              help='YAML file defining batch experiments')
     batch_parser.add_argument('--log-dir',
-                             default='../../results', 
+                             default='results', 
                              help='Base log directory')
     
     return parser

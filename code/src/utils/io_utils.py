@@ -63,15 +63,16 @@ def get_json_files(trial):
         raise IOError(f"Error accessing trial JSON files: {e}")
     
 
-def create_param_dir(log_dir, trial_name, w=0, naive_temp=0, soph_temp=0, max_steps=25, model_type="rsm"):
+def create_param_dir(log_dir, trial_name, evidence_type, max_steps=25, model_type="rsm", cost_weight=None, naive_temp=None, soph_temp=None):
     """Creates parameter-specific log directory."""
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    
     if model_type == "rsm":
-        param_subdir = f'w{w}_ntemp{naive_temp}_stemp{soph_temp}_steps{max_steps}_{timestamp}'
+        param_subdir = f'w{cost_weight}_{evidence_type}_ntemp{naive_temp}_stemp{soph_temp}_steps{max_steps}_{timestamp}'
     elif model_type == "uniform":
-        param_subdir = f'uniform_steps{max_steps}'
+        param_subdir = f'uniform_{evidence_type}_steps{max_steps}_{timestamp}'
     elif model_type == "empirical":
-         param_subdir = 'empirical'
+        param_subdir = 'empirical'
     else:
         param_subdir = 'unknown_model'
 

@@ -1,26 +1,17 @@
-# Default visual config parameters
-
-# Sampling
-sampling:
-  max_steps: 25
-  num_suspect_paths: 50
-  num_detective_paths: 1000
-  seed: 42
-  naive_temp: 0.1
-  sophisticated_temp: 0.1
-  cost_weight: 20
-
-# Evidence
-evidence:
-  naive_detective_sigma: 0.5 
-  crumb_planting_sigma: 1.0
-  sophisticated_detective_sigma: 2.0
-  visual_naive_likelihood_alpha: 1.0
-  visual_sophisticated_likelihood_alpha: 1.0
-
-# Simulation
-simulation:
-  log_dir: "../../results"
+# Visual evidence configuration
+# Inherits from default.yaml and overrides specific values for visual evidence
 
 default_trial: "snack1"
 default_evidence: "visual"
+
+# Sampling
+sampling:
+  cost_weight: 20     
+
+# Visual evidence
+evidence:
+  evidence_type: "visual"
+  naive_detective_sigma: 0.5      # Lower noise for naive detective predictions
+  sophisticated_detective_sigma: 2.0  # Higher noise for sophisticated detective predictions
+  visual_naive_likelihood_alpha: 1.0   # Visual evidence strength for naive agents
+  visual_sophisticated_likelihood_alpha: 1.0  # Visual evidence strength for sophisticated agents

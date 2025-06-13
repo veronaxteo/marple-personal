@@ -49,7 +49,8 @@ class PathSampler:
         """Dispatcher to call the appropriate sampling method based on evidence type."""
         if task.agent_type == 'naive':
             return self._sample_paths_naive(task)
-
+        elif task.agent_type == 'uniform':
+            return self._sample_paths_uniform(task)
         elif task.agent_type == 'sophisticated':
             cache_key = (task.agent_id, task.agent_type, task.config.evidence.evidence_type)
             if cache_key in self.utility_cache:

@@ -1,7 +1,10 @@
+"""
+Various math utilities.
+"""
+
 import numpy as np
 from numpy.random import rand
 from scipy.ndimage import gaussian_filter
-from collections import deque
 from typing import List
 
 

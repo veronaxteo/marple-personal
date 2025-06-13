@@ -17,7 +17,7 @@ from ..analysis.plot import create_simulation_plots
 class ExperimentRunner:
     """Experiment runner that uses YAML configs"""
     
-    def __init__(self, log_dir: str = "../../results"):
+    def __init__(self, log_dir: str = "results"):
         self.log_dir = os.path.abspath(log_dir)
         self.logger = logging.getLogger(self.__class__.__name__)
     
@@ -48,11 +48,12 @@ class ExperimentRunner:
         param_log_dir = create_param_dir(
             self.log_dir, 
             trial_name,
-            w=config.sampling.cost_weight,
-            naive_temp=config.sampling.naive_temp,
-            soph_temp=config.sampling.sophisticated_temp,
+            evidence_type=evidence_type,
             max_steps=config.sampling.max_steps,
-            model_type="rsm"
+            model_type="rsm",
+            cost_weight=config.sampling.cost_weight,
+            naive_temp=config.sampling.naive_temp,
+            soph_temp=config.sampling.sophisticated_temp
         )
         
         # Setup logging

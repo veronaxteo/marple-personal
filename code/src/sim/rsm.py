@@ -19,9 +19,7 @@ class RSMSimulator(BaseSimulator):
         self.logger.info(f"Generating {num_suspect_paths} suspect paths and {num_detective_paths} detective paths")
 
         # Load path sequences for both agents
-        paths_A, paths_B = load_or_compute_simple_path_sequences(
-            world, trial_name, self.config, self.config.sampling.max_steps
-        )
+        paths_A, paths_B = load_or_compute_simple_path_sequences(world, trial_name, self.config, self.config.sampling.max_steps)
 
         # Initialize agents
         suspect = Suspect('suspect_rsm', self.config)
@@ -103,11 +101,6 @@ class RSMSimulator(BaseSimulator):
             self.config.evidence.naive_A_from_fridge_steps_model = naive_A_model[1]
             self.config.evidence.naive_B_to_fridge_steps_model = naive_B_model[0]
             self.config.evidence.naive_B_from_fridge_steps_model = naive_B_model[1]
-            
-            # self.logger.info(f"Audio models: A_to({len(self.config.evidence.naive_A_to_fridge_steps_model)}), "
-            #                f"A_from({len(self.config.evidence.naive_A_from_fridge_steps_model)}), "
-            #                f"B_to({len(self.config.evidence.naive_B_to_fridge_steps_model)}), "
-            #                f"B_from({len(self.config.evidence.naive_B_from_fridge_steps_model)})")
 
         elif self.config.evidence.evidence_type == 'multimodal':
             # Visual component

@@ -1,28 +1,21 @@
-# Default multimodal config parameters
+# Multimodal evidence configuration
+# Inherits from default.yaml and overrides specific values for multimodal evidence
 
-# Sampling
-sampling:
-  max_steps: 25
-  num_suspect_paths: 50
-  num_detective_paths: 1000
-  seed: 42
-  naive_temp: 0.1
-  sophisticated_temp: 0.1
-  cost_weight: 20
-
-# Evidence
-evidence:
-  naive_detective_sigma: 0.5 
-  crumb_planting_sigma: 1.0 
-  sophisticated_detective_sigma: 2.0
-  visual_naive_likelihood_alpha: 1.0
-  visual_sophisticated_likelihood_alpha: 1.0
-  audio_similarity_sigma: 0.3
-  audio_gt_step_size: 2
-
-# Simulation
-simulation:
-  log_dir: "../../results"
-  
+# Evidence type
 default_trial: "snack1"
-default_evidence: "visual"
+default_evidence: "multimodal"
+
+# Sampling parameters optimized for multimodal evidence
+sampling:
+  cost_weight: 20              
+
+# Evidence parameters specific to multimodal evidence (combines visual and audio)
+evidence:
+  evidence_type: "multimodal"
+  naive_detective_sigma: 0.5      # Lower noise for naive detective predictions
+  crumb_planting_sigma: 1.0       # Uncertainty in evidence planting
+  sophisticated_detective_sigma: 2.0  # Higher noise for sophisticated detective predictions
+  visual_naive_likelihood_alpha: 1.0   # Visual evidence strength for naive agents
+  visual_sophisticated_likelihood_alpha: 1.0  # Visual evidence strength for sophisticated agents
+  audio_similarity_sigma: 0.3     # Audio similarity noise parameter
+  audio_gt_step_size: 2          # Audio ground truth step size

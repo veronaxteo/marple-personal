@@ -107,7 +107,8 @@ def create_parser():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
         Examples:
-        %(prog)s rsm --evidence visual --trial snack1 --max-steps 25
+        %(prog)s rsm --evidence visual --trial snack1 --override sampling.max_steps=25 sampling.cost_weight=10.0
+        %(prog)s rsm --evidence visual --trial snack1 --override evidence.naive_detective_sigma=1.5
         %(prog)s empirical --paths results/paths.csv --mismatched
         %(prog)s uniform --trial snack2
         """
@@ -118,28 +119,53 @@ def create_parser():
     # RSM simulation
     rsm_parser = subparsers.add_parser('rsm', help='Run RSM simulation')
     rsm_parser.add_argument('--evidence', choices=['visual', 'audio', 'multimodal'], 
-                           default='visual', help='Evidence type')
+                           default='visual', help='Evidence type (visual, audio, multimodal)')
     rsm_parser.add_argument('--trial', default='snack1', help='Trial name (or "all")')
-    rsm_parser.add_argument('--max-steps', type=int, help='Maximum steps (overrides YAML)')
-    rsm_parser.add_argument('--weight', type=float, help='Cost weight (overrides YAML)')
-    rsm_parser.add_argument('--naive-temp', type=float, help='Naive temperature (overrides YAML)')
-    rsm_parser.add_argument('--soph-temp', type=float, help='Sophisticated temperature (overrides YAML)')
-    rsm_parser.add_argument('--log-dir', default='../../results', help='Log directory')
+    rsm_parser.add_argument('--log-dir', default='results', help='Log directory')
+    rsm_parser.add_argument('--override', action='append', 
+                           help='Override any config parameter using dot notation (e.g., sampling.naive_temp=0.1)')
     
     # Empirical analysis  
     emp_parser = subparsers.add_parser('empirical', help='Run empirical analysis')
     emp_parser.add_argument('--paths', required=True, help='CSV file with empirical paths')
     emp_parser.add_argument('--trial', default='all', help='Trial name (or "all")')
     emp_parser.add_argument('--mismatched', action='store_true', help='Mismatched analysis')
-    emp_parser.add_argument('--log-dir', default='../../results', help='Log directory')
+    emp_parser.add_argument('--log-dir', default='results', help='Log directory')
     
     # Uniform baseline
     uniform_parser = subparsers.add_parser('uniform', help='Run uniform baseline')
+    uniform_parser.add_argument('--evidence', choices=['visual', 'audio', 'multimodal'], 
+                               default='visual', help='Evidence type (visual, audio, multimodal)')
     uniform_parser.add_argument('--trial', default='snack1', help='Trial name (or "all")')
     uniform_parser.add_argument('--max-steps', type=int, default=25, help='Maximum steps')
-    uniform_parser.add_argument('--log-dir', default='../../results', help='Log directory')
+    uniform_parser.add_argument('--log-dir', default='results', help='Log directory')
     
     return parser
+
+
+def parse_overrides(override_args):
+    """Parse CLI override arguments into parameter dictionary"""
+    overrides = {}
+    
+    if not override_args:
+        return overrides
+    
+    for override in override_args:
+        key, value = override.split('=', 1)
+        
+        try:
+            if value.lower() in ('true', 'false'):
+                value = value.lower() == 'true'
+            elif '.' in value:
+                value = float(value)
+            else:
+                value = int(value)
+        except ValueError:
+            pass
+        
+        overrides[key] = value
+    
+    return overrides
 
 
 def create_config_from_args(args):
@@ -154,35 +180,15 @@ def create_config_from_args(args):
         if not os.path.exists(evidence_config_path):
             evidence_config_path = os.path.join(cfg_dir, 'default.yaml')
         
-        with open(evidence_config_path, 'r') as f:
-            defaults = yaml.safe_load(f)
+        # Parse override arguments
+        param_overrides = parse_overrides(getattr(args, 'override', None))
         
-        # Only override YAML values with CLI arguments that were explicitly provided
-        defaults['default_trial'] = args.trial
-        defaults['evidence']['evidence_type'] = args.evidence
+        # Always set trial and evidence type
+        param_overrides['default_trial'] = args.trial
+        param_overrides['evidence.evidence_type'] = args.evidence
         
-        # Override sampling parameters only if provided on command line
-        if args.weight is not None:
-            defaults['sampling']['cost_weight'] = args.weight
-        if args.naive_temp is not None:
-            defaults['sampling']['naive_temp'] = args.naive_temp
-        if args.soph_temp is not None:
-            defaults['sampling']['sophisticated_temp'] = args.soph_temp
-        if args.max_steps is not None:
-            defaults['sampling']['max_steps'] = args.max_steps
-        
-        # Note: audio_similarity_sigma should come from YAML files
-        
-        # Create config from modified defaults
-        sampling_config = SamplingConfig(**defaults.get('sampling', {}))
-        evidence_config = EvidenceConfig(**defaults.get('evidence', {}))
-        
-        config = SimulationConfig(
-            trial_name=defaults.get('default_trial', 'snack1'),
-            sampling=sampling_config,
-            evidence=evidence_config,
-            **defaults.get('simulation', {})
-        )
+        # Create config using new unified method
+        config = SimulationConfig.from_params(evidence_config_path, **param_overrides)
         
         # Set additional RSM-specific parameters
         config.log_dir_base = os.path.abspath(args.log_dir)
@@ -190,23 +196,16 @@ def create_config_from_args(args):
     elif args.command == 'empirical':
         # Load defaults and create basic config for empirical analysis
         defaults_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'cfg', 'default.yaml')
-        with open(defaults_path, 'r') as f:
-            defaults = yaml.safe_load(f)
         
-        defaults['default_trial'] = args.trial
-        defaults['sampling']['cost_weight'] = 1.0
-        defaults['sampling']['naive_temp'] = 0.01
-        defaults['sampling']['sophisticated_temp'] = 0.01
-        defaults['sampling']['max_steps'] = 25
-        
-        sampling_config = SamplingConfig(**defaults.get('sampling', {}))
-        evidence_config = EvidenceConfig(**defaults.get('evidence', {}))
-        
-        config = SimulationConfig(
-            trial_name=defaults.get('default_trial', 'snack1'),
-            sampling=sampling_config,
-            evidence=evidence_config,
-            **defaults.get('simulation', {})
+        config = SimulationConfig.from_params(
+            defaults_path,
+            **{
+                'default_trial': args.trial,
+                'sampling.cost_weight': 1.0,
+                'sampling.naive_temp': 0.01,
+                'sampling.sophisticated_temp': 0.01,
+                'sampling.max_steps': 25,
+            }
         )
         
         config.log_dir_base = os.path.abspath(args.log_dir)
@@ -214,25 +213,24 @@ def create_config_from_args(args):
         config.mismatched_analysis = getattr(args, 'mismatched', False)
         
     elif args.command == 'uniform':
-        # Load defaults and create config for uniform baseline
-        defaults_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'cfg', 'default.yaml')
-        with open(defaults_path, 'r') as f:
-            defaults = yaml.safe_load(f)
+        # Load evidence-specific config for uniform baseline
+        cfg_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'cfg')
+        evidence_config_path = os.path.join(cfg_dir, f'{args.evidence}.yaml')
         
-        defaults['default_trial'] = args.trial
-        defaults['sampling']['cost_weight'] = 1.0
-        defaults['sampling']['naive_temp'] = 0.01
-        defaults['sampling']['sophisticated_temp'] = 0.01
-        defaults['sampling']['max_steps'] = args.max_steps
+        # Fallback to default.yaml if evidence-specific config doesn't exist
+        if not os.path.exists(evidence_config_path):
+            evidence_config_path = os.path.join(cfg_dir, 'default.yaml')
         
-        sampling_config = SamplingConfig(**defaults.get('sampling', {}))
-        evidence_config = EvidenceConfig(**defaults.get('evidence', {}))
-        
-        config = SimulationConfig(
-            trial_name=defaults.get('default_trial', 'snack1'),
-            sampling=sampling_config,
-            evidence=evidence_config,
-            **defaults.get('simulation', {})
+        config = SimulationConfig.from_params(
+            evidence_config_path,
+            **{
+                'default_trial': args.trial,
+                'evidence.evidence_type': args.evidence,
+                'sampling.cost_weight': 1.0,
+                'sampling.naive_temp': 0.01,
+                'sampling.sophisticated_temp': 0.01,
+                'sampling.max_steps': args.max_steps,
+            }
         )
         
         config.log_dir_base = os.path.abspath(args.log_dir)
@@ -254,11 +252,12 @@ def run_rsm_simulation(args):
     # Use actual config values for parameter directory naming
     param_log_dir = create_param_dir(
         log_dir_base, args.trial, 
-        w=config.sampling.cost_weight, 
-        naive_temp=config.sampling.naive_temp,
-        soph_temp=config.sampling.sophisticated_temp,
+        evidence_type=args.evidence,
         max_steps=config.sampling.max_steps,
-        model_type="rsm"
+        model_type="rsm",
+        cost_weight=config.sampling.cost_weight, 
+        naive_temp=config.sampling.naive_temp,
+        soph_temp=config.sampling.sophisticated_temp
     )
     
     # Setup logging in the param directory
@@ -303,7 +302,11 @@ def run_empirical_analysis(args):
     # Set random seed
     set_random_seed(config.seed)
     
-    param_log_dir = create_param_dir(log_dir_base, args.trial, model_type="empirical")
+    param_log_dir = create_param_dir(
+        log_dir_base, args.trial, 
+        evidence_type='visual',  # Default for empirical
+        model_type="empirical"
+    )
     
     # Setup logging in the param directory
     log_path = setup_logging(param_log_dir)
@@ -347,7 +350,12 @@ def run_uniform_baseline(args):
     # Set random seed
     set_random_seed(config.seed)
     
-    param_log_dir = create_param_dir(log_dir_base, args.trial, max_steps=args.max_steps, model_type="uniform")
+    param_log_dir = create_param_dir(
+        log_dir_base, args.trial, 
+        evidence_type=args.evidence,
+        max_steps=args.max_steps, 
+        model_type="uniform"
+    )
     
     # Setup logging in the param directory
     log_path = setup_logging(param_log_dir)
@@ -371,8 +379,8 @@ def run_uniform_baseline(args):
         # Remove .json extension if present
         trial_name_clean = trial_name.replace('_A1.json', '').replace('.json', '')
         try:
-            create_simulation_plots(param_log_dir, trial_name_clean, 'visual')
-            logger.info(f"Generated visual plots for trial {trial_name_clean}")
+            create_simulation_plots(param_log_dir, trial_name_clean, args.evidence)
+            logger.info(f"Generated {args.evidence} plots for trial {trial_name_clean}")
         except Exception as e:
             logger.warning(f"Could not generate plots for trial {trial_name_clean}: {e}")
     

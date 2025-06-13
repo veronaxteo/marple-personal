@@ -1,3 +1,7 @@
+"""
+Evidence utilities for processing and predicting evidence.
+"""
+
 from abc import ABC
 import json
 import logging
@@ -159,18 +163,13 @@ class AudioEvidenceProcessor(EvidenceProcessor):
     def compute_detective_predictions(self, task: DetectiveTaskConfig) -> PredictionResult:
         """Compute audio evidence predictions using new config system"""
         self.logger.info(f"Computing AUDIO detective predictions for {task.agent_type_being_simulated} agents")
-        
         gt_audio_sequences = generate_ground_truth_audio_sequences(task.world, task.config)
-        if not gt_audio_sequences:
-            self.logger.warning("No ground truth audio sequences generated")
-            return PredictionResult({}, ([], []), ([], []), [])
         
         # Access data from the dictionary of lists
         agent_A_data = task.sampled_data.get('A', {})
         agent_B_data = task.sampled_data.get('B', {})
         agent_A_audio_sequences = agent_A_data.get('audio_sequences', [])
         agent_B_audio_sequences = agent_B_data.get('audio_sequences', [])
-
         
         agent_A_to_steps, agent_A_from_steps = self._extract_step_lengths(agent_A_audio_sequences)
         agent_B_to_steps, agent_B_from_steps = self._extract_step_lengths(agent_B_audio_sequences)
@@ -252,7 +251,7 @@ class MultimodalEvidenceProcessor(EvidenceProcessor):
             'sampled_data': task.sampled_data,
             'agent_type_being_simulated': task.agent_type_being_simulated,
             'trial_name': task.trial_name,
-            'param_log_dir': None,
+            'param_log_dir': task.param_log_dir,
             'config': task.config
         }
         visual_task = DetectiveTaskConfig(**visual_task_info)

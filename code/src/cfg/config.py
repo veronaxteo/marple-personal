@@ -2,6 +2,7 @@
 Main configuration classes for simulation.
 
 Provides dataclass-based configuration system with type safety and validation.
+All default values are defined in YAML files, not in Python code.
 """
 
 import os
@@ -13,68 +14,38 @@ from typing import Dict, List, Optional, Any
 @dataclass
 class SamplingConfig:
     """Configuration for path sampling behavior"""
-    num_suspect_paths: int = 50
-    num_detective_paths: int = 1000
-    max_steps: int = 25
-    seed: int = 42
+    num_suspect_paths: int
+    num_detective_paths: int
+    max_steps: int
+    seed: int
+    naive_temp: float
+    sophisticated_temp: float
+    cost_weight: float
     
-    naive_temp: float = 0.01
-    sophisticated_temp: float = 0.01
-    
-    cost_weight: float = 1.0
-    
-    def __post_init__(self):
-        # Inline validation
-        if self.max_steps <= 0:
-            raise ValueError("max_steps must be positive")
-        if self.num_suspect_paths <= 0:
-            raise ValueError("num_suspect_paths must be positive")
-        if self.num_detective_paths <= 0:
-            raise ValueError("num_detective_paths must be positive")
-        if self.naive_temp <= 0:
-            raise ValueError("naive_temp must be positive")
-        if self.sophisticated_temp <= 0:
-            raise ValueError("sophisticated_temp must be positive")
-        if not (self.cost_weight >= 0.0):
-            raise ValueError("cost_weight must be non-negative")
-
 
 @dataclass
 class EvidenceConfig:
     """Evidence-related configuration"""
-    evidence_type: str = 'visual'
-    
-    naive_detective_sigma: float = 1.0 
-    crumb_planting_sigma: float = 1.0 
-    sophisticated_detective_sigma: float = 1.0
+    evidence_type: str
+    naive_detective_sigma: float
+    crumb_planting_sigma: float
+    sophisticated_detective_sigma: float
     
     # Visual evidence settings
-    visual_naive_likelihood_alpha: float = 0.01
-    visual_sophisticated_likelihood_alpha: float = 1.0
+    visual_naive_likelihood_alpha: float
+    visual_sophisticated_likelihood_alpha: float
     
-    # Audio evidence settings
+    # Audio evidence settings (with defaults since they're optional)
     audio_similarity_sigma: float = 0.1
     audio_gt_step_size: int = 2
     
-    # Naive agent models (for sophisticated agents)
+    # Naive agent models (for sophisticated agents) - always empty by default
     naive_A_visual_likelihoods_map: Dict = field(default_factory=dict)
     naive_B_visual_likelihoods_map: Dict = field(default_factory=dict)
     naive_A_to_fridge_steps_model: List = field(default_factory=list)
     naive_A_from_fridge_steps_model: List = field(default_factory=list)
     naive_B_to_fridge_steps_model: List = field(default_factory=list)
     naive_B_from_fridge_steps_model: List = field(default_factory=list)
-    
-    def __post_init__(self):
-        # Validate evidence type and parameters
-        self.evidence_type = validate_evidence_type(self.evidence_type)
-        if self.audio_similarity_sigma < 0 or self.audio_similarity_sigma > 1:
-            raise ValueError("audio_similarity_sigma must be between 0 and 1")
-        if self.audio_gt_step_size < 1:
-            raise ValueError("audio_gt_step_size must be at least 1")
-        if self.visual_naive_likelihood_alpha < 0:
-            raise ValueError("visual_naive_likelihood_alpha must be non-negative")
-        if self.visual_sophisticated_likelihood_alpha < 0:
-            raise ValueError("visual_sophisticated_likelihood_alpha must be non-negative")
 
 
 @dataclass
@@ -93,169 +64,93 @@ class AgentConfig:
 class SimulationConfig:
     """Top-level simulation configuration"""
     trial_name: str
-    seed: int = 42
+    seed: int
     
     # Component configurations
-    sampling: SamplingConfig = field(default_factory=SamplingConfig)
-    evidence: EvidenceConfig = field(default_factory=EvidenceConfig)
+    sampling: SamplingConfig
+    evidence: EvidenceConfig
     
     # Logging and output
-    log_dir: str = "../../results"
-    log_dir_base: str = "../../results"  # Base directory for all logging
-    save_intermediate_results: bool = True
-    
-    def __post_init__(self):
-        # Validate trial name
-        self.trial_name = validate_trial_name(self.trial_name)
-        
-        # Validate simulation parameters
-        if not self.log_dir or not isinstance(self.log_dir, str):
-            raise ValueError("log_dir must be a non-empty string")
-        if not self.log_dir_base or not isinstance(self.log_dir_base, str):
-            raise ValueError("log_dir_base must be a non-empty string")
-        if not isinstance(self.save_intermediate_results, bool):
-            raise ValueError("save_intermediate_results must be a boolean")
+    log_dir: str
+    log_dir_base: str
+    save_intermediate_results: bool = True 
     
     @classmethod
-    def from_yaml(cls, yaml_path: str, **overrides) -> 'SimulationConfig':
-        """Create configuration from YAML file with optional overrides"""
+    def from_params(cls, base_config_path: str, **params) -> 'SimulationConfig':
+        """
+        Create configuration from YAML base and parameter overrides.
+        
+        This is the ONLY factory method - all other creation should use this.
+        
+        Args:
+            base_config_path: Path to base YAML config (e.g., 'visual.yaml')
+            **params: Parameters to override using dot notation keys
+        
+        Example:
+            config = SimulationConfig.from_params(
+                'visual.yaml',
+                **{
+                    'default_trial': 'snack2',
+                    'sampling.naive_temp': 0.05,
+                    'sampling.cost_weight': 10.0,
+                    'evidence.naive_detective_sigma': 1.5,
+                }
+            )
+        """
         # Load defaults first
         defaults_path = os.path.join(os.path.dirname(__file__), 'default.yaml')
         with open(defaults_path, 'r') as f:
             defaults = yaml.safe_load(f)
         
-        # Load custom config if provided
-        if os.path.exists(yaml_path):
-            with open(yaml_path, 'r') as f:
+        # Load custom config if provided and exists
+        if os.path.exists(base_config_path):
+            with open(base_config_path, 'r') as f:
                 custom = yaml.safe_load(f)
-                defaults.update(custom)
+                defaults = cls._deep_update(defaults, custom)
         
-        # Apply overrides
-        defaults.update(overrides)
+        # Apply parameter overrides using dot notation
+        if params:
+            nested_overrides = cls._params_to_nested_dict(params)
+            defaults = cls._deep_update(defaults, nested_overrides)
         
-        # Extract components
-        sampling_config = SamplingConfig(**defaults.get('sampling', {}))
-        evidence_config = EvidenceConfig(**defaults.get('evidence', {}))
+        # Extract components - all values must be present in YAML
+        sampling_config = SamplingConfig(**defaults['sampling'])
+        evidence_config = EvidenceConfig(**defaults['evidence'])
         
         return cls(
-            trial_name=defaults.get('default_trial', 'snack1'),
+            trial_name=defaults['default_trial'],
+            seed=defaults.get('seed', defaults['sampling']['seed']),  # Use sampling seed as fallback
             sampling=sampling_config,
             evidence=evidence_config,
-            **defaults.get('simulation', {})
+            log_dir=defaults['simulation']['log_dir'],
+            log_dir_base=defaults['simulation'].get('log_dir_base', defaults['simulation']['log_dir']),
+            save_intermediate_results=defaults['simulation'].get('save_intermediate_results', True)
         )
     
-    @classmethod
-    def from_evidence_type(cls, evidence_type: str, trial_name: str = None, **overrides) -> 'SimulationConfig':
-        """Factory method to load config for specific evidence type"""
-        config_dir = os.path.dirname(__file__)
-        
-        # Map evidence types to config files
-        config_files = {
-            'visual': os.path.join(config_dir, 'visual.yaml'),
-            'audio': os.path.join(config_dir, 'audio.yaml'),
-            'multimodal': os.path.join(config_dir, 'multimodal.yaml')
-        }
-        
-        if evidence_type not in config_files:
-            raise ValueError(f"Unknown evidence type: {evidence_type}. Must be one of {list(config_files.keys())}")
-        
-        config_path = config_files[evidence_type]
-        
-        # Set evidence type and trial name if provided
-        if 'evidence' not in overrides:
-            overrides['evidence'] = {}
-        overrides['evidence']['evidence_type'] = evidence_type
-        
-        if trial_name:
-            overrides['default_trial'] = trial_name
-            
-        return cls.from_yaml(config_path, **overrides)
+    @staticmethod
+    def _params_to_nested_dict(params: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert dot notation parameters to nested dictionary"""
+        result = {}
+        for key, value in params.items():
+            keys = key.split('.')
+            current = result
+            for k in keys[:-1]:
+                if k not in current:
+                    current[k] = {}
+                current = current[k]
+            current[keys[-1]] = value
+        return result
     
-    @classmethod
-    def create_visual_config(
-        cls, 
-        trial_name: str, 
-        cost_weight: float = 1.0, 
-        naive_temp: float = 0.01,
-        sophisticated_temp: float = 0.01,
-        max_steps: int = 25,
-        **kwargs
-    ) -> 'SimulationConfig':
-        """Factory method for visual evidence simulation"""
-        sampling = SamplingConfig(
-            cost_weight=cost_weight,
-            naive_temp=naive_temp,
-            sophisticated_temp=sophisticated_temp,
-            max_steps=max_steps
-        )
-        evidence = EvidenceConfig(evidence_type="visual")
-        
-        return cls(
-            trial_name=trial_name,
-            sampling=sampling,
-            evidence=evidence,
-            **kwargs
-        )
-    
-    @classmethod
-    def create_audio_config(
-        cls,
-        trial_name: str,
-        cost_weight: float = 1.0,
-        naive_temp: float = 0.01,
-        sophisticated_temp: float = 0.01,
-        max_steps: int = 25,
-        audio_similarity_sigma: float = 0.1,
-        **kwargs
-    ) -> 'SimulationConfig':
-        """Factory method for audio evidence simulation"""
-        sampling = SamplingConfig(
-            cost_weight=cost_weight,
-            naive_temp=naive_temp,
-            sophisticated_temp=sophisticated_temp,
-            max_steps=max_steps
-        )
-        evidence = EvidenceConfig(
-            evidence_type="audio",
-            audio_similarity_sigma=audio_similarity_sigma
-        )
-        
-        return cls(
-            trial_name=trial_name,
-            sampling=sampling,
-            evidence=evidence,
-            **kwargs
-        )
-    
-    @classmethod
-    def create_multimodal_config(
-        cls,
-        trial_name: str,
-        cost_weight: float = 1.0,
-        naive_temp: float = 0.01,
-        sophisticated_temp: float = 0.01,
-        max_steps: int = 25,
-        audio_similarity_sigma: float = 0.1,
-        **kwargs
-    ) -> 'SimulationConfig':
-        """Factory method for multimodal evidence simulation"""
-        sampling = SamplingConfig(
-            cost_weight=cost_weight,
-            naive_temp=naive_temp,
-            sophisticated_temp=sophisticated_temp,
-            max_steps=max_steps
-        )
-        evidence = EvidenceConfig(
-            evidence_type="multimodal",
-            audio_similarity_sigma=audio_similarity_sigma
-        )
-        
-        return cls(
-            trial_name=trial_name,
-            sampling=sampling,
-            evidence=evidence,
-            **kwargs
-        )
+    @staticmethod
+    def _deep_update(base_dict: Dict, update_dict: Dict) -> Dict:
+        """Deep update dictionary, handling nested structures"""
+        result = base_dict.copy()
+        for key, value in update_dict.items():
+            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+                result[key] = SimulationConfig._deep_update(result[key], value)
+            else:
+                result[key] = value
+        return result
 
 
 @dataclass
@@ -286,30 +181,3 @@ class PathSamplingTask:
     def num_sample_paths(self) -> int:
         """Get number of paths to sample based on context"""
         return self.config.sampling.num_suspect_paths
-
-
-def create_simulation_config(evidence_type: str = "visual", trial_name: str = "snack1", **kwargs) -> SimulationConfig:
-    """Factory function to create simulation configuration"""
-    if evidence_type == "visual":
-        return SimulationConfig.create_visual_config(trial_name=trial_name, **kwargs)
-    elif evidence_type == "audio":
-        return SimulationConfig.create_audio_config(trial_name=trial_name, **kwargs)
-    elif evidence_type == "multimodal":
-        return SimulationConfig.create_multimodal_config(trial_name=trial_name, **kwargs)
-    else:
-        raise ValueError(f"Unknown evidence type: {evidence_type}") 
-    
-
-def validate_evidence_type(evidence_type: str) -> str:
-    """Validate evidence type parameter"""
-    valid_types = ['visual', 'audio', 'multimodal']
-    if evidence_type not in valid_types:
-        raise ValueError(f"evidence_type must be one of {valid_types}, got {evidence_type}")
-    return evidence_type
-
-
-def validate_trial_name(trial_name: str) -> str:
-    """Validate trial name parameter"""
-    if not trial_name or not isinstance(trial_name, str):
-        raise ValueError("trial_name must be a non-empty string")
-    return trial_name

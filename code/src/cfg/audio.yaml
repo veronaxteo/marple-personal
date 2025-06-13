@@ -1,23 +1,15 @@
-# Default audio config parameters
-
-# Sampling
-sampling:
-  max_steps: 25
-  num_suspect_paths: 50
-  num_detective_paths: 1000
-  seed: 42
-  naive_temp: 0.1
-  sophisticated_temp: 0.1
-  cost_weight: 20
-
-# Evidence
-evidence:
-  audio_similarity_sigma: 0.3
-  audio_gt_step_size: 2
-
-# Simulation
-simulation:
-  log_dir: "../../results"
+# Audio evidence configuration
+# Inherits from default.yaml and overrides specific values for audio evidence
 
 default_trial: "snack1"
 default_evidence: "audio"
+
+# Sampling
+sampling:
+  cost_weight: 20            
+
+# Audio evidence
+evidence:
+  evidence_type: "audio"
+  audio_similarity_sigma: 0.3     # Audio similarity noise parameter
+  audio_gt_step_size: 2          # Audio ground truth step size

@@ -518,24 +518,39 @@ def create_simulation_plots(param_log_dir: str, trial_name: str, evidence_type: 
     logger.info(f"Creating {evidence_type} evidence plots for trial {trial_name} in {param_log_dir}")
     
     path_segments = ['return_from_fridge', 'to_fridge']
-    agent_types = ['naive', 'sophisticated']
     
-    for agent_type in agent_types:
+    # Check what agent types are available by looking at CSV files
+    available_agent_types = []
+    for agent_type in ['naive', 'sophisticated', 'uniform']:
         csv_path = os.path.join(param_log_dir, f"{trial_name}_sampled_paths_{agent_type}.csv")
+        if os.path.exists(csv_path):
+            available_agent_types.append(agent_type)
+    
+    # Plot suspect path heatmaps for available agent types
+    for agent_type in available_agent_types:
         for path_segment_type in path_segments:
             try:
-                    plot_suspect_paths_heatmap(trial_name, param_log_dir, agent_type, 
-                                             'visual', path_segment_type)
+                plot_suspect_paths_heatmap(trial_name, param_log_dir, agent_type, 
+                                         'visual', path_segment_type)
             except Exception as e:
                 logger.warning(f"Could not create {path_segment_type} plot for {agent_type}: {e}")
     
+    # Plot crumb planting heatmap (only for sophisticated agents)
     if evidence_type in ['visual', 'multimodal']:
         try:
             plot_suspect_crumb_planting_heatmap(trial_name, param_log_dir)
         except Exception as e:
             logger.warning(f"Could not create crumb planting heatmap: {e}")
     
-    for agent_type in ['naive', 'sophisticated']:
+    # Plot detective predictions for available agent types
+    prediction_agent_types = ['naive', 'sophisticated', 'uniform']
+    for agent_type in prediction_agent_types:
+        # Check if prediction file exists for this agent type
+        prediction_file = os.path.join(param_log_dir, f"{trial_name}_{agent_type}_{evidence_type}_predictions.json")
+        if not os.path.exists(prediction_file):
+            logger.warning(f"Prediction file not found: {prediction_file}")
+            continue
+            
         if evidence_type == 'multimodal':
             try:
                 plot_multimodal_visual_predictions_heatmap(trial_name, param_log_dir, agent_type)
