@@ -11,7 +11,7 @@ class RSMSimulator(BaseSimulator):
     """
     Recursive simulation model for up to level k=2 suspects and detectives.
     """
-    def run_trial(self, trial_file: str, trial_name: str, world: World) -> dict:
+    def run_trial(self, trial_name: str, world: World) -> dict:
         """Run RSM simulation for a single trial"""
         num_suspect_paths = self.config.sampling.num_suspect_paths
         num_detective_paths = self.config.sampling.num_detective_paths
@@ -69,7 +69,7 @@ class RSMSimulator(BaseSimulator):
             self.config.evidence.audio_from_likelihood_map = from_lik_map
 
         # Process naive models for sophisticated suspects
-        self._process_naive_models_for_sophisticated(naive_A_model, naive_B_model, world)
+        self._process_naive_models_for_sophisticated(naive_A_model, naive_B_model)
         
         # Level 2: Sophisticated agents
         self.logger.info("--- Simulating Level 2 (Sophisticated Agent) ---")
@@ -88,7 +88,7 @@ class RSMSimulator(BaseSimulator):
             f"sophisticated_{self.config.evidence.evidence_type}_predictions": soph_predictions
         }
 
-    def _process_naive_models_for_sophisticated(self, naive_A_model, naive_B_model, world):
+    def _process_naive_models_for_sophisticated(self, naive_A_model, naive_B_model):
         """Process naive detective models for use by sophisticated suspects."""
         if self.config.evidence.evidence_type == 'visual':
             # Smoothed visual likelihoods

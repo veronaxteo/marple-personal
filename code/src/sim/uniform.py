@@ -1,4 +1,3 @@
-import logging
 import numpy as np
 from src.core.world import World
 from src.core.world.utils import load_or_compute_simple_path_sequences
@@ -12,7 +11,7 @@ class UniformSimulator(BaseSimulator):
     """
     Simulator for uniform recursive model.
     """
-    def run_trial(self, trial_file: str, trial_name: str, world: World) -> dict:
+    def run_trial(self, trial_name: str, world: World) -> dict:
         """Run uniform simulation for a single trial"""
         self.logger.info(f"Running uniform simulation for {trial_name}")
         

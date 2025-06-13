@@ -46,7 +46,7 @@ class EmpiricalSimulator(BaseSimulator):
             self.logger.error(f"Error loading empirical data: {e}")
             exit()
 
-    def run_trial(self, trial_file: str, trial_name: str, world: World) -> dict:
+    def run_trial(self, trial_name: str, world: World) -> dict:
         """Run empirical analysis for a single trial"""
         trial_data = self.empirical_data[self.empirical_data['trial'] == trial_name]
 

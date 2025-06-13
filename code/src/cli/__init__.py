@@ -1,129 +1,38 @@
 """
 Command Line Interface for simulation.
-
-Provides command-line interface for running different simulation types
-including RSM, empirical analysis, and uniform baseline models.
+Provides a CLI that delegates all orchestration to SimulationRunner.
 """
 
 import argparse
-import logging
 import sys
-import os
-import datetime
-import numpy as np
-import random
-import json
-import yaml
-from dataclasses import asdict
-
-from ..utils.io_utils import get_json_files, create_param_dir
-from ..cfg import SimulationConfig, SamplingConfig, EvidenceConfig
-from ..sim import RSMSimulator, EmpiricalSimulator, UniformSimulator
-from ..analysis.plot import create_simulation_plots
-
-
-def setup_logging(log_dir, log_file=None):
-    """Setup logging configuration"""
-    os.makedirs(log_dir, exist_ok=True)
-    
-    if log_file is None:
-        # timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        log_file = f"simulation.log"
-    
-    log_path = os.path.join(log_dir, log_file)
-    
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler(log_path),
-            logging.StreamHandler(sys.stdout)
-        ]
-    )
-    
-    return log_path
-
-
-def set_random_seed(seed: int):
-    """Set random seed for reproducible results"""
-    np.random.seed(seed)
-    random.seed(seed)
-    logger = logging.getLogger(__name__)
-    logger.info(f"Random seed set to: {seed}")
-
-
-def save_metadata(config, param_log_dir):
-    """Save simulation configuration metadata to JSON file"""
-    metadata_filepath = os.path.join(param_log_dir, 'metadata.json')
-    
-    # Convert config to dictionary
-    cfg_dict = asdict(config)
-
-    # Clean up parameters based on evidence type
-    evidence_type = cfg_dict.get('evidence', {}).get('evidence_type')
-    
-    if 'evidence' in cfg_dict:
-        evidence_dict = cfg_dict['evidence']
-        
-        # Always remove these large fields
-        large_fields = [
-            'naive_A_visual_likelihoods_map', 'naive_B_visual_likelihoods_map',
-            'naive_A_to_fridge_steps_model', 'naive_A_from_fridge_steps_model',
-            'naive_B_to_fridge_steps_model', 'naive_B_from_fridge_steps_model'
-        ]
-        for field in large_fields:
-            evidence_dict.pop(field, None)
-            
-        if evidence_type == 'visual':
-            # Remove audio and multimodal params
-            audio_params = ['audio_similarity_sigma', 'audio_gt_step_size']
-            for param in audio_params:
-                evidence_dict.pop(param, None)
-                
-        elif evidence_type == 'audio':
-            # Remove visual and multimodal params
-            visual_params = [
-                'naive_detective_sigma', 'crumb_planting_sigma', 
-                'sophisticated_detective_sigma',
-                'visual_naive_likelihood_alpha', 'visual_sophisticated_likelihood_alpha'
-            ]
-            for param in visual_params:
-                evidence_dict.pop(param, None)
-
-    # Add timestamp
-    cfg_dict['simulation_timestamp'] = datetime.datetime.now().isoformat()
-    
-    with open(metadata_filepath, 'w') as f_meta:
-        json.dump(cfg_dict, f_meta, indent=4)
-    
-    logger = logging.getLogger(__name__)
-    logger.info(f"Saved metadata to {metadata_filepath}")
+from typing import Dict, Any
+from ..sim import SimulationRunner
 
 
 def create_parser():
     """Create argument parser for CLI"""
     parser = argparse.ArgumentParser(
-        description="Simulation",
+        description="Simulation Framework",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
         Examples:
         %(prog)s rsm --evidence visual --trial snack1 --override sampling.max_steps=25 sampling.cost_weight=10.0
-        %(prog)s rsm --evidence visual --trial snack1 --override evidence.naive_detective_sigma=1.5
-        %(prog)s empirical --paths results/paths.csv --mismatched
-        %(prog)s uniform --trial snack2
+        %(prog)s empirical --paths results/paths.csv --trial snack1 --mismatched
+        %(prog)s uniform --evidence audio --trial snack2 --max-steps 30
+        %(prog)s batch experiments.yaml
         """
     )
-    
     subparsers = parser.add_subparsers(dest='command', help='Simulation type')
     
     # RSM simulation
     rsm_parser = subparsers.add_parser('rsm', help='Run RSM simulation')
     rsm_parser.add_argument('--evidence', choices=['visual', 'audio', 'multimodal'], 
-                           default='visual', help='Evidence type (visual, audio, multimodal)')
-    rsm_parser.add_argument('--trial', default='snack1', help='Trial name (or "all")')
+                           required=True, help='Evidence type')
+    rsm_parser.add_argument('--trial', required=True, help='Trial name (or "all")')
     rsm_parser.add_argument('--log-dir', default='results', help='Log directory')
+    rsm_parser.add_argument('--name', help='Experiment name (optional)')
     rsm_parser.add_argument('--override', action='append', 
-                           help='Override any config parameter using dot notation (e.g., sampling.naive_temp=0.1)')
+                           help='Override config parameter using dot notation (e.g., sampling.naive_temp=0.1)')
     
     # Empirical analysis  
     emp_parser = subparsers.add_parser('empirical', help='Run empirical analysis')
@@ -131,19 +40,30 @@ def create_parser():
     emp_parser.add_argument('--trial', default='all', help='Trial name (or "all")')
     emp_parser.add_argument('--mismatched', action='store_true', help='Mismatched analysis')
     emp_parser.add_argument('--log-dir', default='results', help='Log directory')
+    emp_parser.add_argument('--name', help='Experiment name (optional)')
+    emp_parser.add_argument('--override', action='append', 
+                           help='Override config parameter using dot notation')
     
     # Uniform baseline
     uniform_parser = subparsers.add_parser('uniform', help='Run uniform baseline')
     uniform_parser.add_argument('--evidence', choices=['visual', 'audio', 'multimodal'], 
-                               default='visual', help='Evidence type (visual, audio, multimodal)')
-    uniform_parser.add_argument('--trial', default='snack1', help='Trial name (or "all")')
+                               required=True, help='Evidence type')
+    uniform_parser.add_argument('--trial', required=True, help='Trial name (or "all")')
     uniform_parser.add_argument('--max-steps', type=int, default=25, help='Maximum steps')
     uniform_parser.add_argument('--log-dir', default='results', help='Log directory')
+    uniform_parser.add_argument('--name', help='Experiment name (optional)')
+    uniform_parser.add_argument('--override', action='append', 
+                               help='Override config parameter using dot notation')
+    
+    # Batch experiments
+    batch_parser = subparsers.add_parser('batch', help='Run batch experiments')
+    batch_parser.add_argument('config_file', help='YAML file defining batch experiments')
+    batch_parser.add_argument('--log-dir', default='results', help='Log directory')
     
     return parser
 
 
-def parse_overrides(override_args):
+def parse_overrides(override_args) -> Dict[str, Any]:
     """Parse CLI override arguments into parameter dictionary"""
     overrides = {}
     
@@ -151,8 +71,11 @@ def parse_overrides(override_args):
         return overrides
     
     for override in override_args:
+        if '=' not in override:
+            continue
+            
         key, value = override.split('=', 1)
-        
+
         try:
             if value.lower() in ('true', 'false'):
                 value = value.lower() == 'true'
@@ -161,231 +84,11 @@ def parse_overrides(override_args):
             else:
                 value = int(value)
         except ValueError:
-            pass
+            pass  # Keep as string
         
         overrides[key] = value
     
     return overrides
-
-
-def create_config_from_args(args):
-    """Create SimulationConfig object from CLI arguments"""
-    
-    if args.command == 'rsm':
-        # Load evidence-specific YAML config
-        cfg_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'cfg')
-        evidence_config_path = os.path.join(cfg_dir, f'{args.evidence}.yaml')
-        
-        # Fallback to default.yaml if evidence-specific config doesn't exist
-        if not os.path.exists(evidence_config_path):
-            evidence_config_path = os.path.join(cfg_dir, 'default.yaml')
-        
-        # Parse override arguments
-        param_overrides = parse_overrides(getattr(args, 'override', None))
-        
-        # Always set trial and evidence type
-        param_overrides['default_trial'] = args.trial
-        param_overrides['evidence.evidence_type'] = args.evidence
-        
-        # Create config using new unified method
-        config = SimulationConfig.from_params(evidence_config_path, **param_overrides)
-        
-        # Set additional RSM-specific parameters
-        config.log_dir_base = os.path.abspath(args.log_dir)
-        
-    elif args.command == 'empirical':
-        # Load defaults and create basic config for empirical analysis
-        defaults_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'cfg', 'default.yaml')
-        
-        config = SimulationConfig.from_params(
-            defaults_path,
-            **{
-                'default_trial': args.trial,
-                'sampling.cost_weight': 1.0,
-                'sampling.naive_temp': 0.01,
-                'sampling.sophisticated_temp': 0.01,
-                'sampling.max_steps': 25,
-            }
-        )
-        
-        config.log_dir_base = os.path.abspath(args.log_dir)
-        config.empirical_paths_file = args.paths
-        config.mismatched_analysis = getattr(args, 'mismatched', False)
-        
-    elif args.command == 'uniform':
-        # Load evidence-specific config for uniform baseline
-        cfg_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'cfg')
-        evidence_config_path = os.path.join(cfg_dir, f'{args.evidence}.yaml')
-        
-        # Fallback to default.yaml if evidence-specific config doesn't exist
-        if not os.path.exists(evidence_config_path):
-            evidence_config_path = os.path.join(cfg_dir, 'default.yaml')
-        
-        config = SimulationConfig.from_params(
-            evidence_config_path,
-            **{
-                'default_trial': args.trial,
-                'evidence.evidence_type': args.evidence,
-                'sampling.cost_weight': 1.0,
-                'sampling.naive_temp': 0.01,
-                'sampling.sophisticated_temp': 0.01,
-                'sampling.max_steps': args.max_steps,
-            }
-        )
-        
-        config.log_dir_base = os.path.abspath(args.log_dir)
-    
-    return config
-
-
-def run_rsm_simulation(args):
-    """Run RSM simulation"""
-    # Setup directories
-    log_dir_base = os.path.abspath(args.log_dir)
-    
-    # Create configuration
-    config = create_config_from_args(args)
-    
-    # Set random seed
-    set_random_seed(config.seed)
-    
-    # Use actual config values for parameter directory naming
-    param_log_dir = create_param_dir(
-        log_dir_base, args.trial, 
-        evidence_type=args.evidence,
-        max_steps=config.sampling.max_steps,
-        model_type="rsm",
-        cost_weight=config.sampling.cost_weight, 
-        naive_temp=config.sampling.naive_temp,
-        soph_temp=config.sampling.sophisticated_temp
-    )
-    
-    # Setup logging in the param directory
-    log_path = setup_logging(param_log_dir)
-    logger = logging.getLogger(__name__)
-    logger.info(f"Starting RSM simulation - Log: {log_path}")
-    
-    # Save metadata
-    save_metadata(config, param_log_dir)
-    
-    # Get trials to run
-    trials_to_run = get_json_files(args.trial)
-    logger.info(f"Trials to run: {trials_to_run}")
-    
-    # Run simulation
-    simulator = RSMSimulator(config, log_dir_base, param_log_dir, trials_to_run)
-    results = simulator.run()
-
-    # Generate plots automatically
-    logger.info("Generating automatic plots for simulation results...")
-    for trial_name in trials_to_run:
-        # Remove .json extension if present
-        trial_name_clean = trial_name.replace('_A1.json', '').replace('.json', '')
-        try:
-            create_simulation_plots(param_log_dir, trial_name_clean, args.evidence)
-            logger.info(f"Generated {args.evidence} plots for trial {trial_name_clean}")
-        except Exception as e:
-            logger.warning(f"Could not generate plots for trial {trial_name_clean}: {e}")
-    
-    logger.info(f"RSM simulation completed. Results: {len(results)} trials processed")
-    return results
-
-
-def run_empirical_analysis(args):
-    """Run empirical analysis"""
-    # Setup directories  
-    log_dir_base = os.path.abspath(args.log_dir)
-    
-    # Create configuration
-    config = create_config_from_args(args)
-    
-    # Set random seed
-    set_random_seed(config.seed)
-    
-    param_log_dir = create_param_dir(
-        log_dir_base, args.trial, 
-        evidence_type='visual',  # Default for empirical
-        model_type="empirical"
-    )
-    
-    # Setup logging in the param directory
-    log_path = setup_logging(param_log_dir)
-    logger = logging.getLogger(__name__)
-    logger.info(f"Starting empirical analysis - Log: {log_path}")
-    
-    # Save metadata
-    save_metadata(config, param_log_dir)
-    
-    # Get trials to run
-    trials_to_run = get_json_files(args.trial)
-    logger.info(f"Trials to analyze: {trials_to_run}")
-    
-    # Run analysis
-    simulator = EmpiricalSimulator(config, log_dir_base, param_log_dir, trials_to_run)
-    results = simulator.run()
-    
-    # Generate plots automatically (use visual evidence for empirical)
-    logger.info("Generating automatic plots for empirical analysis results...")
-    for trial_name in trials_to_run:
-        # Remove .json extension if present
-        trial_name_clean = trial_name.replace('_A1.json', '').replace('.json', '')
-        try:
-            create_simulation_plots(param_log_dir, trial_name_clean, 'visual')
-            logger.info(f"Generated visual plots for trial {trial_name_clean}")
-        except Exception as e:
-            logger.warning(f"Could not generate plots for trial {trial_name_clean}: {e}")
-    
-    logger.info(f"Empirical analysis completed. Results: {len(results)} trials processed")
-    return results
-
-
-def run_uniform_baseline(args):
-    """Run uniform baseline simulation"""
-    # Setup directories
-    log_dir_base = os.path.abspath(args.log_dir)
-    
-    # Create configuration
-    config = create_config_from_args(args)
-    
-    # Set random seed
-    set_random_seed(config.seed)
-    
-    param_log_dir = create_param_dir(
-        log_dir_base, args.trial, 
-        evidence_type=args.evidence,
-        max_steps=args.max_steps, 
-        model_type="uniform"
-    )
-    
-    # Setup logging in the param directory
-    log_path = setup_logging(param_log_dir)
-    logger = logging.getLogger(__name__)
-    logger.info(f"Starting uniform baseline - Log: {log_path}")
-    
-    # Save metadata
-    save_metadata(config, param_log_dir)
-    
-    # Get trials to run
-    trials_to_run = get_json_files(args.trial)
-    logger.info(f"Trials to run: {trials_to_run}")
-    
-    # Run simulation
-    simulator = UniformSimulator(config, log_dir_base, param_log_dir, trials_to_run)
-    results = simulator.run()
-    
-    # Generate plots automatically (use visual evidence for uniform)
-    logger.info("Generating automatic plots for uniform baseline results...")
-    for trial_name in trials_to_run:
-        # Remove .json extension if present
-        trial_name_clean = trial_name.replace('_A1.json', '').replace('.json', '')
-        try:
-            create_simulation_plots(param_log_dir, trial_name_clean, args.evidence)
-            logger.info(f"Generated {args.evidence} plots for trial {trial_name_clean}")
-        except Exception as e:
-            logger.warning(f"Could not generate plots for trial {trial_name_clean}: {e}")
-    
-    logger.info(f"Uniform baseline completed. Results: {len(results)} trials processed")
-    return results
 
 
 def main():
@@ -398,16 +101,63 @@ def main():
         return 1
     
     try:
+        runner = SimulationRunner(args.log_dir)
+        
         if args.command == 'rsm':
-            return run_rsm_simulation(args)
-        elif args.command == 'empirical':
-            return run_empirical_analysis(args)
-        elif args.command == 'uniform':
-            return run_uniform_baseline(args)
-        else:
-            print(f"Unknown command: {args.command}")
-            return 1
+            # Parse overrides
+            overrides = parse_overrides(getattr(args, 'override', None))
             
+            # Run RSM experiment
+            results = runner.run_rsm_experiment(
+                evidence_type=args.evidence,
+                trial_name=args.trial,
+                config_overrides=overrides,
+                experiment_name=getattr(args, 'name', None)
+            )
+            
+            print(f"RSM simulation completed. Results: {len(results)} trials processed")
+            
+        elif args.command == 'empirical':
+            # Parse overrides
+            overrides = parse_overrides(getattr(args, 'override', None))
+            
+            # Run empirical analysis
+            results = runner.run_empirical_experiment(
+                empirical_paths_file=args.paths,
+                trial_name=args.trial,
+                mismatched_analysis=args.mismatched,
+                config_overrides=overrides,
+                experiment_name=getattr(args, 'name', None)
+            )
+            
+            print(f"Empirical analysis completed. Results: {len(results)} trials processed")
+            
+        elif args.command == 'uniform':
+            # Parse overrides
+            overrides = parse_overrides(getattr(args, 'override', None))
+            
+            # Run uniform baseline
+            results = runner.run_uniform_experiment(
+                evidence_type=args.evidence,
+                trial_name=args.trial,
+                max_steps=args.max_steps,
+                config_overrides=overrides,
+                experiment_name=getattr(args, 'name', None)
+            )
+            
+            print(f"Uniform baseline completed. Results: {len(results)} trials processed")
+            
+        elif args.command == 'batch':
+            # Load batch config and run
+            import yaml
+            with open(args.config_file, 'r') as f:
+                batch_config = yaml.safe_load(f)
+            
+            results = runner.run_batch_experiments(batch_config.get('experiments', []))
+            print(f"Batch completed. {len(results)} experiments run")
+            
+        return 0
+        
     except KeyboardInterrupt:
         print("\nSimulation interrupted by user")
         return 1

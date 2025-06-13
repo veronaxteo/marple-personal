@@ -45,7 +45,7 @@ class BaseSimulator(ABC):
                 world = World.initialize_world_start(trial_file)
                 
                 # Run trial-specific simulation
-                trial_result = self.run_trial(trial_file, trial_name, world)
+                trial_result = self.run_trial(trial_name, world)
                 results.append(trial_result)
                 
                 self.logger.info(f"===== Finished Trial: {trial_name} =====")
@@ -60,7 +60,7 @@ class BaseSimulator(ABC):
         return results
     
     @abstractmethod
-    def run_trial(self, trial_file: str, trial_name: str, world: World) -> Dict[str, Any]:
+    def run_trial(self, trial_name: str, world: World) -> Dict[str, Any]:
         """
         Run simulation for a single trial.
         

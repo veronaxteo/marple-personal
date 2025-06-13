@@ -35,11 +35,11 @@ class EvidenceConfig:
     visual_naive_likelihood_alpha: float
     visual_sophisticated_likelihood_alpha: float
     
-    # Audio evidence settings (with defaults since they're optional)
-    audio_similarity_sigma: float = 0.1
-    audio_gt_step_size: int = 2
+    # Audio evidence settings
+    audio_similarity_sigma: float
+    audio_gt_step_size: int
     
-    # Naive agent models (for sophisticated agents) - always empty by default
+    # Naive agent models (for sophisticated agents), always empty by default
     naive_A_visual_likelihoods_map: Dict = field(default_factory=dict)
     naive_B_visual_likelihoods_map: Dict = field(default_factory=dict)
     naive_A_to_fridge_steps_model: List = field(default_factory=list)
@@ -80,8 +80,6 @@ class SimulationConfig:
         """
         Create configuration from YAML base and parameter overrides.
         
-        This is the ONLY factory method - all other creation should use this.
-        
         Args:
             base_config_path: Path to base YAML config (e.g., 'visual.yaml')
             **params: Parameters to override using dot notation keys
@@ -119,7 +117,7 @@ class SimulationConfig:
         
         return cls(
             trial_name=defaults['default_trial'],
-            seed=defaults.get('seed', defaults['sampling']['seed']),  # Use sampling seed as fallback
+            seed=defaults.get('seed', defaults['sampling']['seed']),
             sampling=sampling_config,
             evidence=evidence_config,
             log_dir=defaults['simulation']['log_dir'],
